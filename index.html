@@ -38,8 +38,15 @@
   .verdict-text b{color:var(--ink);}
   label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:5px;}
   .field{margin-bottom:14px;}
-  input[type=date],input[type=number],input[type=text]{width:100%;background:var(--panel-alt);border:1px solid var(--line);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:14px;padding:10px 12px;border-radius:2px;}
+  input[type=date],input[type=number],input[type=text],input[type=password]{width:100%;background:var(--panel-alt);border:1px solid var(--line);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:14px;padding:10px 12px;border-radius:2px;}
   input:focus{outline:2px solid var(--sage);outline-offset:1px;}
+  #app{display:none;}
+  #app.ready{display:block;}
+  #unlockGate{max-width:680px;margin:0 auto;padding:28px 20px 60px;}
+  #unlockGate.hidden{display:none;}
+  .sync-note{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);margin:0 0 18px;}
+  .sync-note.err{color:var(--rust);}
+  .sync-note.ok{color:var(--sage);}
   .row2{display:flex;gap:12px;flex-wrap:wrap;}
   .row2 > div{flex:1;min-width:100px;}
   .row3{display:flex;gap:12px;flex-wrap:wrap;}
@@ -75,11 +82,23 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div id="unlockGate">
+  <div class="eyebrow">Weekly Recomp Log</div>
+  <h1>Recomp Ledger</h1>
+  <p class="sub">Enter your passphrase to load and sync logs across devices.</p>
+  <div class="card">
+    <div class="field"><label>Passphrase</label><input type="password" id="passphraseInput" autocomplete="current-password"></div>
+    <div class="btnrow"><button id="unlockBtn" class="accent">Unlock</button></div>
+    <div class="status" id="unlockStatus"></div>
+  </div>
+</div>
+
+<div class="wrap" id="app">
 
   <div class="eyebrow">Weekly Recomp Log</div>
   <h1>Recomp Ledger</h1>
   <p class="sub">Daily weight + macros, weekly measurements, and every workout logged. It reads your 7-day average weight (AWW) — more reliable than any single weigh-in — and tells you straight whether to hold, add fuel, or cut back.</p>
+  <p class="sync-note" id="syncNote">Syncing…</p>
 
   <div class="card" id="targetsCard">
     <div class="stamp" id="stamp">Logging</div>
@@ -187,6 +206,8 @@
 
 <script>
 const STORAGE_KEY = 'physique-data';
+const PASS_KEY = 'ledger-passphrase';
+const API_URL = '/.netlify/functions/ledger';
 const HEIGHT_IN = 75;
 const DEFAULT_TARGETS = { calories: 2600, protein: 200 };
 
@@ -196,29 +217,103 @@ function classifyChestWaist(r){ if(r==null) return ''; if(r>=1.3) return 'flag-g
 let state = { dailyLogs: [], measurements: [], workouts: [], targets: { ...DEFAULT_TARGETS }, adjustments: [] };
 let chart = null;
 let editingWorkoutId = null;
+let unlocked = false;
+let saveTimer = null;
 
-['dlDate','mDate','wDate'].forEach(id => document.getElementById(id).valueAsDate = new Date());
-
+function getPassphrase(){ return sessionStorage.getItem(PASS_KEY) || ''; }
+function setSyncNote(msg, kind){
+  const el = document.getElementById('syncNote');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'sync-note' + (kind ? ' ' + kind : '');
+}
+function applyParsedState(p){
+  state = {
+    dailyLogs: p.dailyLogs || [],
+    measurements: p.measurements || [],
+    workouts: p.workouts || [],
+    targets: p.targets || { ...DEFAULT_TARGETS },
+    adjustments: p.adjustments || []
+  };
+  state.workouts.forEach(w=>{ if(!w.id) w.id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2)); });
+}
+function cacheLocal(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e){ console.error('Storage error', e); }
+}
+async function fetchCloud(method, body){
+  const opts = {
+    method,
+    headers: {
+      'X-Ledger-Passphrase': getPassphrase(),
+      'Content-Type': 'application/json'
+    }
+  };
+  if(body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(API_URL, opts);
+  if(res.status === 401) throw new Error('Wrong passphrase');
+  if(!res.ok){
+    let detail = '';
+    try{ const j = await res.json(); detail = j.error || ''; }catch(_){}
+    throw new Error(detail || ('Sync failed (' + res.status + ')'));
+  }
+  if(method === 'GET') return res.json();
+  return null;
+}
 async function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      const p = JSON.parse(raw);
-      state = {
-        dailyLogs: p.dailyLogs || [],
-        measurements: p.measurements || [],
-        workouts: p.workouts || [],
-        targets: p.targets || { ...DEFAULT_TARGETS },
-        adjustments: p.adjustments || []
-      };
-    }
+    if(raw) applyParsedState(JSON.parse(raw));
   }catch(e){ /* fresh start */ }
-  state.workouts.forEach(w=>{ if(!w.id) w.id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2)); });
+
+  if(unlocked){
+    try{
+      const cloud = await fetchCloud('GET');
+      applyParsedState(cloud);
+      cacheLocal();
+      setSyncNote('Synced across devices', 'ok');
+    }catch(e){
+      setSyncNote('Offline / sync failed — using local cache. ' + (e.message || ''), 'err');
+    }
+  }
   render();
 }
 async function saveState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  catch(e){ console.error('Storage error', e); }
+  cacheLocal();
+  if(!unlocked) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try{
+      await fetchCloud('PUT', state);
+      setSyncNote('Synced across devices', 'ok');
+    }catch(e){
+      setSyncNote('Offline / sync failed — saved locally. ' + (e.message || ''), 'err');
+    }
+  }, 400);
+}
+function showApp(){
+  document.getElementById('unlockGate').classList.add('hidden');
+  document.getElementById('app').classList.add('ready');
+  ['dlDate','mDate','wDate'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && !el.value) el.valueAsDate = new Date();
+  });
+}
+async function unlockWithPassphrase(pass){
+  const status = document.getElementById('unlockStatus');
+  status.textContent = 'Unlocking…';
+  sessionStorage.setItem(PASS_KEY, pass);
+  try{
+    await fetchCloud('GET');
+    unlocked = true;
+    showApp();
+    await loadState();
+    status.textContent = '';
+  }catch(e){
+    sessionStorage.removeItem(PASS_KEY);
+    unlocked = false;
+    status.textContent = e.message || 'Could not unlock';
+  }
 }
 function sortByDate(arr){ return [...arr].sort((a,b)=> new Date(a.date)-new Date(b.date)); }
 
@@ -601,7 +696,21 @@ document.getElementById('exportCsvBtn').onclick = () => {
   setTimeout(()=>downloadFile('workouts.csv', wCsv, 'text/csv'), 600);
 };
 
-loadState();
+document.getElementById('unlockBtn').onclick = () => {
+  const pass = document.getElementById('passphraseInput').value;
+  if(!pass){ document.getElementById('unlockStatus').textContent = 'Enter passphrase'; return; }
+  unlockWithPassphrase(pass);
+};
+document.getElementById('passphraseInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('unlockBtn').click();
+});
+
+const existingPass = getPassphrase();
+if(existingPass){
+  unlockWithPassphrase(existingPass);
+} else {
+  document.getElementById('passphraseInput').focus();
+}
 </script>
 </body>
 </html>
