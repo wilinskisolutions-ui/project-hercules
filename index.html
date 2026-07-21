@@ -201,9 +201,9 @@ let editingWorkoutId = null;
 
 async function loadState(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){
-      const p = JSON.parse(res.value);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
       state = {
         dailyLogs: p.dailyLogs || [],
         measurements: p.measurements || [],
@@ -217,7 +217,7 @@ async function loadState(){
   render();
 }
 async function saveState(){
-  try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch(e){ console.error('Storage error', e); }
 }
 function sortByDate(arr){ return [...arr].sort((a,b)=> new Date(a.date)-new Date(b.date)); }
