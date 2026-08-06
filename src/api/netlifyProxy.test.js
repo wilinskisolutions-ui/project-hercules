@@ -7,8 +7,8 @@ describe('Netlify ledger proxy', () => {
   it('answers OPTIONS locally without calling upstream', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const response = await handler(new Request('https://site.test/api/ledger', { method: 'OPTIONS' }))
-    expect(response.statusCode).toBe(200)
-    expect(response.headers['Access-Control-Allow-Origin']).toBe('*')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -30,8 +30,8 @@ describe('Netlify ledger proxy', () => {
     )
     const upstreamOptions = fetchMock.mock.calls[0][1]
     expect(upstreamOptions.headers.get('x-ledger-passphrase')).toBe('EMIL')
-    expect(response.headers['Cache-Control']).toContain('no-store')
-    expect(response.statusCode).toBe(200)
+    expect(response.headers.get('Cache-Control')).toContain('no-store')
+    expect(response.status).toBe(200)
   })
 })
 

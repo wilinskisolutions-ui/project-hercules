@@ -7,11 +7,10 @@ const noStoreHeaders = {
 }
 
 function response(statusCode, body, headers = {}) {
-  return {
-    statusCode,
-    body,
+  return new Response(body, {
+    status: statusCode,
     headers: { ...noStoreHeaders, ...headers },
-  }
+  })
 }
 
 export default async (request) => {
