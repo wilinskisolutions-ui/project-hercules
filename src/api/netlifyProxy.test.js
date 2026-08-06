@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import handler from './ledger.mjs'
+import handler from '../../netlify/functions/ledger.mjs'
 
 afterEach(() => vi.restoreAllMocks())
 
