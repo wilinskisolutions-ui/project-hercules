@@ -18,6 +18,60 @@ function json(status: number, body: unknown) {
   });
 }
 
+class ApiError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function requiredString(value: unknown, field: string, max = 500): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ApiError(400, "VALIDATION_ERROR", `${field} is required`);
+  }
+  if (value.length > max) {
+    throw new ApiError(400, "VALIDATION_ERROR", `${field} is too long`);
+  }
+  return value.trim();
+}
+
+function optionalString(value: unknown, field: string, max = 2000): string {
+  if (value == null) return "";
+  if (typeof value !== "string" || value.length > max) {
+    throw new ApiError(400, "VALIDATION_ERROR", `${field} is invalid`);
+  }
+  return value.trim();
+}
+
+function validDate(value: unknown, field = "date"): string {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) {
+    throw new ApiError(400, "VALIDATION_ERROR", `${field} must be YYYY-MM-DD`);
+  }
+  return value;
+}
+
+function numberValue(
+  value: unknown,
+  field: string,
+  { optional = false, min = 0, max = 100_000 } = {},
+): number | null {
+  if (optional && (value == null || value === "")) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new ApiError(400, "VALIDATION_ERROR", `${field} is invalid`);
+  }
+  return parsed;
+}
+
 function getServiceKey(): string {
   const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (legacy) return legacy;
@@ -57,11 +111,14 @@ async function expectedPassphrase(supabase: SupabaseClient): Promise<string | nu
 async function checkPassphrase(req: Request, supabase: SupabaseClient) {
   const expected = await expectedPassphrase(supabase);
   if (!expected) {
-    return json(500, { error: "LEDGER_PASSPHRASE is not configured" });
+    return json(500, {
+      error: "LEDGER_PASSPHRASE is not configured",
+      code: "AUTH_NOT_CONFIGURED",
+    });
   }
   const provided = req.headers.get("X-Ledger-Passphrase") || "";
   if (provided !== expected) {
-    return json(401, { error: "Unauthorized" });
+    return json(401, { error: "Unauthorized", code: "UNAUTHORIZED" });
   }
   return null;
 }
@@ -102,9 +159,11 @@ function mapWorkout(row: Record<string, unknown>) {
 
 function mapAdjustment(row: Record<string, unknown>) {
   return {
+    id: row.id,
     date: row.date,
     calories: Number(row.calories),
     reason: row.reason,
+    createdAt: row.created_at,
   };
 }
 
@@ -130,7 +189,8 @@ async function bootstrap(supabase: SupabaseClient) {
   const empty =
     dailyLogs.length === 0 &&
     (measRes.data || []).length === 0 &&
-    (workoutRes.data || []).length === 0;
+    (workoutRes.data || []).length === 0 &&
+    (adjRes.data || []).length === 0;
 
   return {
     dailyLogs,
@@ -148,12 +208,12 @@ async function bootstrap(supabase: SupabaseClient) {
 
 async function upsertDaily(supabase: SupabaseClient, row: Record<string, unknown>) {
   const payload = {
-    date: row.date,
-    weight: row.weight,
-    calories: row.calories ?? null,
-    protein: row.protein ?? null,
-    carbs: row.carbs ?? null,
-    fat: row.fat ?? null,
+    date: validDate(row.date),
+    weight: numberValue(row.weight, "weight", { min: 40, max: 1_000 }),
+    calories: numberValue(row.calories, "calories", { optional: true }),
+    protein: numberValue(row.protein, "protein", { optional: true, max: 1_000 }),
+    carbs: numberValue(row.carbs, "carbs", { optional: true, max: 2_000 }),
+    fat: numberValue(row.fat, "fat", { optional: true, max: 1_000 }),
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from("daily_logs").upsert(payload, { onConflict: "date" });
@@ -162,11 +222,11 @@ async function upsertDaily(supabase: SupabaseClient, row: Record<string, unknown
 
 async function upsertMeasurement(supabase: SupabaseClient, row: Record<string, unknown>) {
   const payload = {
-    date: row.date,
-    shoulder: row.shoulder,
-    waist: row.waist,
-    chest: row.chest,
-    notes: row.notes || "",
+    date: validDate(row.date),
+    shoulder: numberValue(row.shoulder, "shoulder", { min: 1, max: 200 }),
+    waist: numberValue(row.waist, "waist", { min: 1, max: 200 }),
+    chest: numberValue(row.chest, "chest", { min: 1, max: 200 }),
+    notes: optionalString(row.notes, "notes"),
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from("measurements").upsert(payload, { onConflict: "date" });
@@ -182,102 +242,105 @@ function isUuid(value: unknown): value is string {
 
 async function upsertWorkout(supabase: SupabaseClient, row: Record<string, unknown>) {
   const payload: Record<string, unknown> = {
-    date: row.date,
-    split: row.split,
-    exercise: row.exercise || "",
-    weight: row.weight ?? null,
-    sets: row.sets ?? null,
-    reps: row.reps ?? null,
-    notes: row.notes || "",
+    date: validDate(row.date),
+    split: requiredString(row.split, "split", 120),
+    exercise: optionalString(row.exercise, "exercise", 200),
+    weight: numberValue(row.weight, "weight", { optional: true, max: 5_000 }),
+    sets: numberValue(row.sets, "sets", { optional: true, max: 100 }),
+    reps: numberValue(row.reps, "reps", { optional: true, max: 10_000 }),
+    notes: optionalString(row.notes, "notes"),
     updated_at: new Date().toISOString(),
   };
   // Legacy local IDs like "w-123" are not valid Postgres uuids — omit so DB generates one.
   if (isUuid(row.id)) payload.id = row.id;
-  const { data, error } = await supabase.from("workouts").upsert(payload).select("id").single();
+  const { data, error } = await supabase
+    .from("workouts")
+    .upsert(payload, { onConflict: "id" })
+    .select("id")
+    .single();
   if (error) throw error;
   return data.id as string;
 }
 
 async function updateSettings(supabase: SupabaseClient, body: Record<string, unknown>) {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (body.calories != null) patch.calories_target = body.calories;
-  if (body.protein != null) patch.protein_target = body.protein;
-  if (body.heightIn != null) patch.height_in = body.heightIn;
+  let caloriesTarget: number | null = null;
+  if (body.calories != null) {
+    caloriesTarget = numberValue(body.calories, "calories", { min: 500, max: 10_000 });
+  }
+  if (body.protein != null) {
+    patch.protein_target = numberValue(body.protein, "protein", { min: 0, max: 1_000 });
+  }
+  if (body.heightIn != null) {
+    patch.height_in = numberValue(body.heightIn, "heightIn", { min: 24, max: 120 });
+  }
   if (body.targets && typeof body.targets === "object") {
     const t = body.targets as Record<string, unknown>;
-    if (t.calories != null) patch.calories_target = t.calories;
-    if (t.protein != null) patch.protein_target = t.protein;
+    if (t.calories != null) {
+      caloriesTarget = numberValue(t.calories, "calories", { min: 500, max: 10_000 });
+    }
+    if (t.protein != null) {
+      patch.protein_target = numberValue(t.protein, "protein", { min: 0, max: 1_000 });
+    }
   }
-  const { error } = await supabase.from("settings").update(patch).eq("id", 1);
-  if (error) throw error;
+  if (Object.keys(patch).length === 1 && caloriesTarget == null) {
+    throw new ApiError(400, "VALIDATION_ERROR", "No settings supplied");
+  }
+
+  if (caloriesTarget != null) {
+    const { data: current, error: readError } = await supabase
+      .from("settings")
+      .select("calories_target")
+      .eq("id", 1)
+      .single();
+    if (readError) throw readError;
+    if (Number(current.calories_target) !== caloriesTarget) {
+      await applyAdjustment(supabase, {
+        calories: caloriesTarget,
+        reason: "Manual target update",
+      });
+    }
+  }
+
+  if (Object.keys(patch).length > 1) {
+    const { error } = await supabase
+      .from("settings")
+      .update(patch)
+      .eq("id", 1)
+      .select("id")
+      .single();
+    if (error) throw error;
+  }
 }
 
 async function applyAdjustment(supabase: SupabaseClient, body: Record<string, unknown>) {
-  const calories = Number(body.calories);
-  const reason = String(body.reason || "Manual adjustment");
-  const date = (body.date as string) || new Date().toISOString().slice(0, 10);
-  const { error: sErr } = await supabase
-    .from("settings")
-    .update({ calories_target: calories, updated_at: new Date().toISOString() })
-    .eq("id", 1);
-  if (sErr) throw sErr;
-  const { error: aErr } = await supabase.from("adjustments").insert({ date, calories, reason });
-  if (aErr) throw aErr;
+  const calories = numberValue(body.calories, "calories", { min: 500, max: 10_000 });
+  const reason = optionalString(body.reason, "reason", 500) || "Manual adjustment";
+  const date = body.date == null
+    ? new Date().toISOString().slice(0, 10)
+    : validDate(body.date);
+  const { error } = await supabase.rpc("apply_calorie_adjustment", {
+    p_calories: calories,
+    p_reason: reason,
+    p_date: date,
+  });
+  if (error) throw error;
 }
 
 async function importState(supabase: SupabaseClient, state: Record<string, unknown>) {
-  const current = await bootstrap(supabase);
-  if (!current.empty) {
-    return json(409, { error: "Cloud already has data. Export/reset before importing." });
+  const { error } = await supabase.rpc("import_ledger_state", { p_state: state });
+  if (error) {
+    if (error.code === "P0001") {
+      throw new ApiError(409, "IMPORT_CONFLICT", error.message);
+    }
+    throw error;
   }
-
-  const targets = (state.targets as Record<string, unknown>) || {};
-  await updateSettings(supabase, {
-    calories: targets.calories ?? DEFAULT_TARGETS.calories,
-    protein: targets.protein ?? DEFAULT_TARGETS.protein,
-    heightIn: state.heightIn ?? DEFAULT_HEIGHT,
-  });
-
-  for (const row of (state.dailyLogs as Record<string, unknown>[]) || []) {
-    await upsertDaily(supabase, row);
-  }
-  for (const row of (state.measurements as Record<string, unknown>[]) || []) {
-    await upsertMeasurement(supabase, row);
-  }
-  for (const row of (state.workouts as Record<string, unknown>[]) || []) {
-    await upsertWorkout(supabase, row);
-  }
-  for (const row of (state.adjustments as Record<string, unknown>[]) || []) {
-    const { error } = await supabase.from("adjustments").insert({
-      date: row.date,
-      calories: row.calories,
-      reason: row.reason || "",
-    });
-    if (error) throw error;
-  }
-
   return json(200, await bootstrap(supabase));
 }
 
 async function resetAll(supabase: SupabaseClient) {
-  const ops = await Promise.all([
-    supabase.from("daily_logs").delete().neq("date", "1900-01-01"),
-    supabase.from("measurements").delete().neq("date", "1900-01-01"),
-    supabase.from("workouts").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-    supabase.from("adjustments").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-    supabase
-      .from("settings")
-      .update({
-        calories_target: DEFAULT_TARGETS.calories,
-        protein_target: DEFAULT_TARGETS.protein,
-        height_in: DEFAULT_HEIGHT,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", 1),
-  ]);
-  for (const op of ops) {
-    if (op.error) throw op.error;
-  }
+  const { error } = await supabase.rpc("reset_ledger");
+  if (error) throw error;
 }
 
 Deno.serve(async (req: Request) => {
@@ -306,7 +369,12 @@ Deno.serve(async (req: Request) => {
       return json(405, { error: "Method not allowed" });
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      throw new ApiError(400, "INVALID_JSON", "Request body must be valid JSON");
+    }
     const op = body.op as string;
 
     switch (op) {
@@ -316,7 +384,10 @@ Deno.serve(async (req: Request) => {
         await upsertDaily(supabase, body.row || body);
         return json(200, { ok: true });
       case "delete_daily": {
-        const { error } = await supabase.from("daily_logs").delete().eq("date", body.date);
+        const { error } = await supabase
+          .from("daily_logs")
+          .delete()
+          .eq("date", validDate(body.date));
         if (error) throw error;
         return json(200, { ok: true });
       }
@@ -324,7 +395,10 @@ Deno.serve(async (req: Request) => {
         await upsertMeasurement(supabase, body.row || body);
         return json(200, { ok: true });
       case "delete_measurement": {
-        const { error } = await supabase.from("measurements").delete().eq("date", body.date);
+        const { error } = await supabase
+          .from("measurements")
+          .delete()
+          .eq("date", validDate(body.date));
         if (error) throw error;
         return json(200, { ok: true });
       }
@@ -350,10 +424,19 @@ Deno.serve(async (req: Request) => {
         await resetAll(supabase);
         return json(200, await bootstrap(supabase));
       default:
-        return json(400, { error: "Unknown op: " + op });
+        return json(400, {
+          error: "Unknown operation",
+          code: "UNKNOWN_OPERATION",
+        });
     }
   } catch (e) {
     console.error(e);
-    return json(500, { error: (e as Error).message || "Server error" });
+    if (e instanceof ApiError) {
+      return json(e.status, { error: e.message, code: e.code });
+    }
+    return json(500, {
+      error: "Server error",
+      code: "INTERNAL_ERROR",
+    });
   }
 });
