@@ -173,6 +173,13 @@ async function upsertMeasurement(supabase: SupabaseClient, row: Record<string, u
   if (error) throw error;
 }
 
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 async function upsertWorkout(supabase: SupabaseClient, row: Record<string, unknown>) {
   const payload: Record<string, unknown> = {
     date: row.date,
@@ -184,7 +191,8 @@ async function upsertWorkout(supabase: SupabaseClient, row: Record<string, unkno
     notes: row.notes || "",
     updated_at: new Date().toISOString(),
   };
-  if (row.id) payload.id = row.id;
+  // Legacy local IDs like "w-123" are not valid Postgres uuids — omit so DB generates one.
+  if (isUuid(row.id)) payload.id = row.id;
   const { data, error } = await supabase.from("workouts").upsert(payload).select("id").single();
   if (error) throw error;
   return data.id as string;
@@ -323,6 +331,7 @@ Deno.serve(async (req: Request) => {
         return json(200, { ok: true, id });
       }
       case "delete_workout": {
+        if (!isUuid(body.id)) return json(200, { ok: true, skipped: true });
         const { error } = await supabase.from("workouts").delete().eq("id", body.id);
         if (error) throw error;
         return json(200, { ok: true });

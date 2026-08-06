@@ -288,6 +288,20 @@ let chartWeight = null, chartCals = null, chartMeas = null;
 let editingWorkoutId = null;
 let unlocked = false;
 let pendingLocalImport = null;
+let importInFlight = null;
+
+function isUuid(value){
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+function newUuid(){
+  if(typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  // RFC4122 v4 fallback (always a valid uuid string for Postgres)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 function todayISO(){
   const d = new Date();
@@ -321,7 +335,7 @@ function applyParsedState(p){
     adjustments: p.adjustments || [],
     heightIn: p.heightIn != null ? Number(p.heightIn) : DEFAULT_HEIGHT
   };
-  state.workouts.forEach(w=>{ if(!w.id) w.id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2)); });
+  state.workouts.forEach(w=>{ if(!isUuid(w.id)) w.id = newUuid(); });
 }
 function cacheLocal(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -385,10 +399,63 @@ async function loadState(){
   render();
 }
 
+async function ensureLocalImported(){
+  if(!pendingLocalImport) return null;
+  if(importInFlight) return importInFlight;
+  importInFlight = (async () => {
+    const snapshot = pendingLocalImport;
+    // Prefer current in-memory edits so the triggering save is not lost.
+    const source = localCount(state) > 0 ? state : snapshot;
+    const merged = {
+      dailyLogs: source.dailyLogs || [],
+      measurements: source.measurements || [],
+      workouts: (source.workouts || []).map(w => {
+        const copy = { ...w };
+        if(!isUuid(copy.id)) delete copy.id;
+        return copy;
+      }),
+      targets: source.targets || { ...DEFAULT_TARGETS },
+      adjustments: source.adjustments || [],
+      heightIn: source.heightIn != null ? source.heightIn : DEFAULT_HEIGHT
+    };
+    try{
+      const cloud = await apiOp('import_state', { state: merged });
+      applyParsedState(cloud);
+      cacheLocal();
+      hideImportBanner();
+      setSyncNote('Imported local data to Supabase', 'ok');
+      return cloud;
+    }catch(e){
+      // Cloud may already have rows; drop pending so later mutations can proceed.
+      if(String(e.message||'').includes('already has data')){
+        hideImportBanner();
+        return null;
+      }
+      throw e;
+    }finally{
+      importInFlight = null;
+    }
+  })();
+  return importInFlight;
+}
+
 async function syncOp(op, payload, okMsg){
   cacheLocal();
   if(!unlocked) return;
   try{
+    if(pendingLocalImport && op !== 'import_state' && op !== 'reset'){
+      await ensureLocalImported();
+    }
+    // Remap non-uuid workout ids before cloud write
+    if(op === 'upsert_workout' && payload && payload.row && !isUuid(payload.row.id)){
+      payload = { ...payload, row: { ...payload.row } };
+      delete payload.row.id;
+    }
+    if(op === 'delete_workout' && payload && !isUuid(payload.id)){
+      // Local-only legacy id: nothing to delete in cloud
+      setSyncNote(okMsg || 'Synced to Supabase', 'ok');
+      return { ok: true };
+    }
     const res = await apiOp(op, payload);
     setSyncNote(okMsg || 'Synced to Supabase', 'ok');
     return res;
@@ -871,7 +938,7 @@ document.getElementById('wSaveBtn').onclick = async () => {
     cancelWorkoutEdit(true);
     statusEl.textContent='Updated.';
   } else {
-    const id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+    const id = newUuid();
     row = { id, date, split, exercise, weight, sets, reps, notes };
     state.workouts.push(row);
     statusEl.textContent='Logged.';
@@ -943,17 +1010,14 @@ document.getElementById('settingsSaveBtn').onclick = async () => {
 document.getElementById('importLocalBtn').onclick = async () => {
   if(!pendingLocalImport) return;
   try{
-    const cloud = await apiOp('import_state', { state: pendingLocalImport });
-    applyParsedState(cloud);
-    cacheLocal();
-    hideImportBanner();
-    setSyncNote('Imported local data to Supabase', 'ok');
+    await ensureLocalImported();
     render();
   }catch(e){
     setSyncNote('Import failed: ' + (e.message||''), 'err');
   }
 };
 document.getElementById('dismissImportBtn').onclick = async () => {
+  if(!confirm('Skip importing local history? Local rows will not be uploaded, and the empty cloud will replace this device cache.')) return;
   hideImportBanner();
   try{
     const cloud = await api('GET');
@@ -1025,6 +1089,14 @@ document.getElementById('unlockBtn').onclick = () => {
 document.getElementById('passphraseInput').addEventListener('keydown', (e) => {
   if(e.key === 'Enter') document.getElementById('unlockBtn').click();
 });
+
+// Inline onclick handlers in history tables need globals
+window.editDailyLog = editDailyLog;
+window.deleteDailyLog = deleteDailyLog;
+window.editMeasurement = editMeasurement;
+window.deleteMeasurement = deleteMeasurement;
+window.editWorkout = editWorkout;
+window.deleteWorkout = deleteWorkout;
 
 const existingPass = getPassphrase();
 if(existingPass){
