@@ -281,21 +281,23 @@ async function resetAll(supabase: SupabaseClient) {
 }
 
 Deno.serve(async (req: Request) => {
+  // Must succeed with CORS headers — browsers preflight before unlock GET/POST.
+  // Use 200 + body "ok" (Supabase CORS guide); 204 with a body can crash Deno.
   if (req.method === "OPTIONS") {
-    return new Response("", { status: 204, headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  let supabase: SupabaseClient;
   try {
-    supabase = adminClient();
-  } catch (e) {
-    return json(500, { error: (e as Error).message });
-  }
+    let supabase: SupabaseClient;
+    try {
+      supabase = adminClient();
+    } catch (e) {
+      return json(500, { error: (e as Error).message });
+    }
 
-  const authError = await checkPassphrase(req, supabase);
-  if (authError) return authError;
+    const authError = await checkPassphrase(req, supabase);
+    if (authError) return authError;
 
-  try {
     if (req.method === "GET") {
       return json(200, await bootstrap(supabase));
     }

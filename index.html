@@ -276,8 +276,14 @@ const PASS_KEY = 'ledger-passphrase';
 const DEFAULT_TARGETS = { calories: 2600, protein: 200 };
 const DEFAULT_HEIGHT = 75;
 const cfg = window.LEDGER_CONFIG || {};
-const API_URL = (cfg.supabaseUrl || '') + '/functions/v1/ledger';
 const ANON_KEY = cfg.supabaseAnonKey || '';
+function resolveApiUrl(){
+  const host = (typeof location !== 'undefined' && location.hostname) || '';
+  // Same-origin Netlify proxy avoids browser CORS preflight to Supabase.
+  if(cfg.apiPath && (host.endsWith('netlify.app') || cfg.forceApiPath)) return cfg.apiPath;
+  return (cfg.supabaseUrl || '') + '/functions/v1/ledger';
+}
+const API_URL = resolveApiUrl();
 
 function classifyWHtR(r){ if(r==null) return ''; if(r>=0.5) return 'flag-bad'; if(r>=0.4) return 'flag-good'; return 'flag-bad'; }
 function classifyShoulderWaist(r){ if(r==null) return ''; if(r>=1.618) return 'flag-good'; if(r>=1.4) return 'flag-amber'; return 'flag-bad'; }
