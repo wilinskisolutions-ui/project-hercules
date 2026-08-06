@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="config.js"></script>
 <style>
   :root{
     --bg:#1B1A18;
@@ -21,10 +22,10 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;}
-  .wrap{max-width:680px;margin:0 auto;padding:28px 20px 60px;}
+  .wrap{max-width:720px;margin:0 auto;padding:28px 20px 60px;}
   .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em;color:var(--ink-dim);text-transform:uppercase;margin-bottom:6px;}
   h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:30px;letter-spacing:0.01em;margin:0 0 6px;text-transform:uppercase;}
-  .sub{color:var(--ink-dim);font-size:13.5px;line-height:1.5;margin:0 0 26px;max-width:56ch;}
+  .sub{color:var(--ink-dim);font-size:13.5px;line-height:1.5;margin:0 0 18px;max-width:56ch;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:2px;padding:20px;margin-bottom:18px;position:relative;overflow:visible;}
   .target-row{display:flex;gap:28px;flex-wrap:wrap;}
   .target{flex:1;min-width:110px;}
@@ -42,17 +43,17 @@
   input:focus{outline:2px solid var(--sage);outline-offset:1px;}
   #app{display:none;}
   #app.ready{display:block;}
-  #unlockGate{max-width:680px;margin:0 auto;padding:28px 20px 60px;}
+  #unlockGate{max-width:720px;margin:0 auto;padding:28px 20px 60px;}
   #unlockGate.hidden{display:none;}
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
   .sync-note{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);margin:0 0 18px;}
   .sync-note.err{color:var(--rust);}
   .sync-note.ok{color:var(--sage);}
+  .sync-note.warn{color:var(--brass);}
   .row2{display:flex;gap:12px;flex-wrap:wrap;}
   .row2 > div{flex:1;min-width:100px;}
   .row3{display:flex;gap:12px;flex-wrap:wrap;}
   .row3 > div{flex:1;min-width:90px;}
-  .checkrow{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;}
-  .checkrow input{width:auto;}
   button{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;padding:11px 18px;border-radius:2px;border:1px solid var(--line);background:var(--ink);color:var(--bg);font-weight:500;cursor:pointer;}
   button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line);}
   button.accent{background:var(--sage);color:#14180F;border-color:var(--sage);}
@@ -64,8 +65,6 @@
   th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap;}
   th{color:var(--ink-dim);font-weight:500;text-transform:uppercase;font-size:10px;letter-spacing:0.05em;}
   tr:nth-child(even) td{background:var(--panel-alt);}
-  .delta-pos{color:var(--brass);}
-  .delta-neg{color:var(--sage);}
   .flag-good{color:var(--sage);}
   .flag-bad{color:var(--rust);}
   .flag-amber{color:var(--brass);}
@@ -79,6 +78,23 @@
   .weekcount{font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;}
   .rowbtn{background:none;border:none;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-decoration:underline;cursor:pointer;padding:2px 4px;}
   .rowbtn.danger{color:var(--rust);}
+  .insights{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;}
+  .insight{border:1px solid var(--line);background:var(--panel);padding:12px 14px;font-size:13px;line-height:1.45;display:flex;gap:10px;align-items:flex-start;cursor:pointer;}
+  .insight:hover{border-color:var(--ink-dim);}
+  .insight .sev{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;min-width:52px;padding-top:2px;}
+  .insight.info .sev{color:var(--ink-dim);}
+  .insight.warn .sev{color:var(--brass);}
+  .insight.bad .sev{color:var(--rust);}
+  .insight.ok .sev{color:var(--sage);}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;}
+  .tab{background:transparent;color:var(--ink-dim);border:1px solid var(--line);padding:8px 14px;}
+  .tab.active{background:var(--panel-alt);color:var(--ink);border-color:var(--ink-dim);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  .chart-grid{display:grid;gap:18px;}
+  .import-banner{border:1px solid var(--brass);background:rgba(176,141,87,0.08);padding:14px;margin-bottom:18px;font-size:13px;line-height:1.5;}
+  .settings-inline{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+  .settings-inline .field{margin:0;flex:1;min-width:100px;}
 </style>
 </head>
 <body>
@@ -94,11 +110,24 @@
 </div>
 
 <div class="wrap" id="app">
-
-  <div class="eyebrow">Weekly Recomp Log</div>
-  <h1>Recomp Ledger</h1>
-  <p class="sub">Daily weight + macros, weekly measurements, and every workout logged. It reads your 7-day average weight (AWW) — more reliable than any single weigh-in — and tells you straight whether to hold, add fuel, or cut back.</p>
+  <div class="header-row">
+    <div>
+      <div class="eyebrow">Weekly Recomp Log</div>
+      <h1>Recomp Ledger</h1>
+    </div>
+  </div>
+  <p class="sub">Daily weight + macros, weekly measurements, and workouts. AWW trend coaching, gap alerts, and row-level sync to Supabase.</p>
   <p class="sync-note" id="syncNote">Syncing…</p>
+
+  <div class="import-banner" id="importBanner" style="display:none;">
+    Local cache has data that isn’t in the cloud yet.
+    <div class="btnrow" style="margin-top:10px;">
+      <button class="accent" id="importLocalBtn">Import local data</button>
+      <button class="secondary" id="dismissImportBtn">Keep cloud empty</button>
+    </div>
+  </div>
+
+  <div class="insights" id="insights"></div>
 
   <div class="card" id="targetsCard">
     <div class="stamp" id="stamp">Logging</div>
@@ -107,51 +136,13 @@
       <div class="target"><div class="target-num" id="proTarget">200</div><div class="target-label">g protein / day</div></div>
     </div>
     <div class="target-meta" id="targetMeta">No entries yet. Log a daily weight below to start building your AWW.</div>
-  </div>
-
-  <h3>Daily Log — weight &amp; ending macros</h3>
-  <div class="card">
-    <div class="field"><label>Date</label><input type="date" id="dlDate"></div>
-    <div class="field"><label>Weight (lb)</label><input type="number" step="0.1" id="dlWeight" placeholder="235.0"></div>
-    <div class="row3">
-      <div class="field"><label>Calories</label><input type="number" step="10" id="dlCalories" placeholder="2600"></div>
-      <div class="field"><label>Protein (g)</label><input type="number" step="1" id="dlProtein" placeholder="200"></div>
-      <div class="field"><label>Carbs (g)</label><input type="number" step="1" id="dlCarbs" placeholder="280"></div>
-      <div class="field"><label>Fat (g)</label><input type="number" step="1" id="dlFat" placeholder="75"></div>
+    <div class="settings-inline">
+      <div class="field"><label>Height (in)</label><input type="number" step="0.1" id="heightInput"></div>
+      <div class="field"><label>Cal target</label><input type="number" step="25" id="calInput"></div>
+      <div class="field"><label>Protein target</label><input type="number" step="5" id="proInput"></div>
+      <button class="secondary" id="settingsSaveBtn" type="button">Save settings</button>
     </div>
-    <div class="btnrow"><button id="dlSaveBtn">Save Day</button></div>
-    <div class="status" id="dlStatus"></div>
-  </div>
-
-  <h3>Weekly Measurements</h3>
-  <div class="card">
-    <div class="field"><label>Date</label><input type="date" id="mDate"></div>
-    <div class="row3">
-      <div class="field"><label>Shoulder (in)</label><input type="number" step="0.1" id="mShoulder"></div>
-      <div class="field"><label>Waist (in)</label><input type="number" step="0.1" id="mWaist"></div>
-      <div class="field"><label>Chest (in)</label><input type="number" step="0.1" id="mChest"></div>
-    </div>
-    <div class="field"><label>Notes (optional)</label><input type="text" id="mNotes"></div>
-    <div class="btnrow"><button id="mSaveBtn">Save Measurements</button></div>
-    <div class="status" id="mStatus"></div>
-    <div class="ratio-box" id="ratioBox"></div>
-  </div>
-
-  <h3>Workout Log</h3>
-  <div class="card">
-    <div class="field"><label>Date</label><input type="date" id="wDate"></div>
-    <div class="row2">
-      <div class="field"><label>Split / muscle group</label><input type="text" id="wSplit" placeholder="Push, Pull, Legs..."></div>
-      <div class="field"><label>Main lift</label><input type="text" id="wExercise" placeholder="Bench press"></div>
-    </div>
-    <div class="row3">
-      <div class="field"><label>Weight (lb)</label><input type="number" step="2.5" id="wWeight"></div>
-      <div class="field"><label>Sets</label><input type="number" step="1" id="wSets"></div>
-      <div class="field"><label>Reps</label><input type="number" step="1" id="wReps"></div>
-    </div>
-    <div class="field"><label>Notes (optional)</label><input type="text" id="wNotes"></div>
-    <div class="btnrow"><button id="wSaveBtn">Log Workout</button><button type="button" class="secondary" id="wCancelBtn" style="display:none;">Cancel Edit</button></div>
-    <div class="status" id="wStatus"></div>
+    <div class="status" id="settingsStatus"></div>
   </div>
 
   <div class="card" id="verdictCard" style="display:none;">
@@ -160,38 +151,114 @@
     <div class="btnrow" id="verdictActions"></div>
   </div>
 
-  <div class="card">
-    <h2>Weight Trend</h2>
-    <canvas id="chart" height="220"></canvas>
-    <div class="empty" id="chartEmpty">Nothing plotted yet — log a few daily weights.</div>
+  <div class="chart-grid">
+    <div class="card">
+      <h2>Weight Trend</h2>
+      <canvas id="chartWeight" height="220"></canvas>
+      <div class="empty" id="chartWeightEmpty">Nothing plotted yet — log a few daily weights.</div>
+    </div>
+    <div class="card">
+      <h2>Calories vs Target</h2>
+      <canvas id="chartCals" height="220"></canvas>
+      <div class="empty" id="chartCalsEmpty">Need calorie entries to plot adherence.</div>
+    </div>
+    <div class="card">
+      <h2>Measurement Trend</h2>
+      <canvas id="chartMeas" height="220"></canvas>
+      <div class="empty" id="chartMeasEmpty">Log weekly measurements to see waist / shoulder / chest.</div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Daily Log History</h2>
-    <div class="tablewrap">
-      <table><thead><tr><th>Date</th><th>Weight</th><th>AWW</th><th>Cal</th><th>Pro</th><th>Carb</th><th>Fat</th><th></th></tr></thead>
-      <tbody id="dlBody"></tbody></table>
-    </div>
-    <div class="empty" id="dlEmpty" style="display:none;">No daily entries yet.</div>
+  <h3>Log</h3>
+  <div class="tabs" id="logTabs">
+    <button type="button" class="tab active" data-tab="daily">Daily</button>
+    <button type="button" class="tab" data-tab="meas">Measurements</button>
+    <button type="button" class="tab" data-tab="workout">Workouts</button>
+    <button type="button" class="tab" data-tab="history">History</button>
   </div>
 
-  <div class="card">
-    <h2>Measurement History</h2>
-    <div class="tablewrap">
-      <table><thead><tr><th>Date</th><th>Shldr</th><th>Waist</th><th>Chest</th><th>Sh:Wst</th><th>Ch:Wst</th><th>W:Ht</th><th>ΔSh</th><th>ΔWst</th><th>ΔCh</th><th>Notes</th><th></th></tr></thead>
-      <tbody id="mBody"></tbody></table>
+  <div class="tab-panel active" id="tab-daily">
+    <div class="card" id="dailyFormCard">
+      <div class="field"><label>Date</label><input type="date" id="dlDate"></div>
+      <div class="field"><label>Weight (lb)</label><input type="number" step="0.1" id="dlWeight" placeholder="235.0"></div>
+      <div class="row3">
+        <div class="field"><label>Calories</label><input type="number" step="10" id="dlCalories" placeholder="2600"></div>
+        <div class="field"><label>Protein (g)</label><input type="number" step="1" id="dlProtein" placeholder="200"></div>
+        <div class="field"><label>Carbs (g)</label><input type="number" step="1" id="dlCarbs" placeholder="280"></div>
+        <div class="field"><label>Fat (g)</label><input type="number" step="1" id="dlFat" placeholder="75"></div>
+      </div>
+      <div class="btnrow"><button id="dlSaveBtn">Save Day</button></div>
+      <div class="status" id="dlStatus"></div>
     </div>
-    <div class="empty" id="mEmpty" style="display:none;">No measurements logged yet.</div>
   </div>
 
-  <div class="card">
-    <h2>Workout History</h2>
-    <div class="weekcount" id="workoutWeekCount"></div>
-    <div class="tablewrap">
-      <table><thead><tr><th>Date</th><th>Split</th><th>Exercise</th><th>Weight</th><th>Sets</th><th>Reps</th><th>Notes</th><th></th></tr></thead>
-      <tbody id="wBody"></tbody></table>
+  <div class="tab-panel" id="tab-meas">
+    <div class="card" id="measFormCard">
+      <div class="field"><label>Date</label><input type="date" id="mDate"></div>
+      <div class="row3">
+        <div class="field"><label>Shoulder (in)</label><input type="number" step="0.1" id="mShoulder"></div>
+        <div class="field"><label>Waist (in)</label><input type="number" step="0.1" id="mWaist"></div>
+        <div class="field"><label>Chest (in)</label><input type="number" step="0.1" id="mChest"></div>
+      </div>
+      <div class="field"><label>Notes (optional)</label><input type="text" id="mNotes"></div>
+      <div class="btnrow"><button id="mSaveBtn">Save Measurements</button></div>
+      <div class="status" id="mStatus"></div>
+      <div class="ratio-box" id="ratioBox"></div>
     </div>
-    <div class="empty" id="wEmpty" style="display:none;">No workouts logged yet.</div>
+  </div>
+
+  <div class="tab-panel" id="tab-workout">
+    <div class="card" id="workoutFormCard">
+      <div class="field"><label>Date</label><input type="date" id="wDate"></div>
+      <div class="row2">
+        <div class="field"><label>Split / muscle group</label><input type="text" id="wSplit" placeholder="Push, Pull, Legs..."></div>
+        <div class="field"><label>Main lift</label><input type="text" id="wExercise" placeholder="Bench press"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label>Weight (lb)</label><input type="number" step="2.5" id="wWeight"></div>
+        <div class="field"><label>Sets</label><input type="number" step="1" id="wSets"></div>
+        <div class="field"><label>Reps</label><input type="number" step="1" id="wReps"></div>
+      </div>
+      <div class="field"><label>Notes (optional)</label><input type="text" id="wNotes"></div>
+      <div class="btnrow"><button id="wSaveBtn">Log Workout</button><button type="button" class="secondary" id="wCancelBtn" style="display:none;">Cancel Edit</button></div>
+      <div class="status" id="wStatus"></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-history">
+    <div class="card">
+      <h2>Daily Log History</h2>
+      <div class="tablewrap">
+        <table><thead><tr><th>Date</th><th>Weight</th><th>AWW</th><th>Cal</th><th>Pro</th><th>Carb</th><th>Fat</th><th></th></tr></thead>
+        <tbody id="dlBody"></tbody></table>
+      </div>
+      <div class="empty" id="dlEmpty" style="display:none;">No daily entries yet.</div>
+    </div>
+    <div class="card">
+      <h2>Measurement History</h2>
+      <div class="tablewrap">
+        <table><thead><tr><th>Date</th><th>Shldr</th><th>Waist</th><th>Chest</th><th>Sh:Wst</th><th>Ch:Wst</th><th>W:Ht</th><th>ΔSh</th><th>ΔWst</th><th>ΔCh</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="mBody"></tbody></table>
+      </div>
+      <div class="empty" id="mEmpty" style="display:none;">No measurements logged yet.</div>
+    </div>
+    <div class="card">
+      <h2>Workout History</h2>
+      <div class="weekcount" id="workoutWeekCount"></div>
+      <div class="tablewrap">
+        <table><thead><tr><th>Date</th><th>Split</th><th>Exercise</th><th>Weight</th><th>Sets</th><th>Reps</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="wBody"></tbody></table>
+      </div>
+      <div class="empty" id="wEmpty" style="display:none;">No workouts logged yet.</div>
+    </div>
+    <div class="card">
+      <h2>Adjustment History</h2>
+      <div class="tablewrap">
+        <table><thead><tr><th>Date</th><th>Calories</th><th>Reason</th></tr></thead>
+        <tbody id="adjBody"></tbody></table>
+      </div>
+      <div class="empty" id="adjEmpty" style="display:none;">No calorie adjustments yet.</div>
+    </div>
   </div>
 
   <div class="footer-link">
@@ -201,25 +268,40 @@
     </div>
     <button id="resetBtn">Reset all data</button>
   </div>
-
 </div>
 
 <script>
 const STORAGE_KEY = 'physique-data';
 const PASS_KEY = 'ledger-passphrase';
-const API_URL = '/.netlify/functions/ledger';
-const HEIGHT_IN = 75;
 const DEFAULT_TARGETS = { calories: 2600, protein: 200 };
+const DEFAULT_HEIGHT = 75;
+const cfg = window.LEDGER_CONFIG || {};
+const API_URL = (cfg.supabaseUrl || '') + '/functions/v1/ledger';
+const ANON_KEY = cfg.supabaseAnonKey || '';
 
 function classifyWHtR(r){ if(r==null) return ''; if(r>=0.5) return 'flag-bad'; if(r>=0.4) return 'flag-good'; return 'flag-bad'; }
 function classifyShoulderWaist(r){ if(r==null) return ''; if(r>=1.618) return 'flag-good'; if(r>=1.4) return 'flag-amber'; return 'flag-bad'; }
 function classifyChestWaist(r){ if(r==null) return ''; if(r>=1.3) return 'flag-good'; if(r>=1.2) return 'flag-amber'; return 'flag-bad'; }
-let state = { dailyLogs: [], measurements: [], workouts: [], targets: { ...DEFAULT_TARGETS }, adjustments: [] };
-let chart = null;
+
+let state = { dailyLogs: [], measurements: [], workouts: [], targets: { ...DEFAULT_TARGETS }, adjustments: [], heightIn: DEFAULT_HEIGHT };
+let chartWeight = null, chartCals = null, chartMeas = null;
 let editingWorkoutId = null;
 let unlocked = false;
-let saveTimer = null;
+let pendingLocalImport = null;
 
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function localDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function daysBetween(a,b){ return Math.round((localDate(b)-localDate(a))/86400000); }
+function addDaysISO(iso, n){
+  const d = localDate(iso); d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getPassphrase(){ return sessionStorage.getItem(PASS_KEY) || ''; }
 function setSyncNote(msg, kind){
   const el = document.getElementById('syncNote');
@@ -227,13 +309,17 @@ function setSyncNote(msg, kind){
   el.textContent = msg;
   el.className = 'sync-note' + (kind ? ' ' + kind : '');
 }
+function localCount(s){
+  return (s.dailyLogs?.length||0) + (s.measurements?.length||0) + (s.workouts?.length||0);
+}
 function applyParsedState(p){
   state = {
     dailyLogs: p.dailyLogs || [],
     measurements: p.measurements || [],
     workouts: p.workouts || [],
     targets: p.targets || { ...DEFAULT_TARGETS },
-    adjustments: p.adjustments || []
+    adjustments: p.adjustments || [],
+    heightIn: p.heightIn != null ? Number(p.heightIn) : DEFAULT_HEIGHT
   };
   state.workouts.forEach(w=>{ if(!w.id) w.id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2)); });
 }
@@ -241,70 +327,92 @@ function cacheLocal(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch(e){ console.error('Storage error', e); }
 }
-async function fetchCloud(method, body){
+
+async function api(method, body){
   const opts = {
     method,
     headers: {
       'X-Ledger-Passphrase': getPassphrase(),
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + ANON_KEY,
+      'apikey': ANON_KEY
     }
   };
   if(body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(API_URL, opts);
   if(res.status === 401) throw new Error('Wrong passphrase');
-  if(!res.ok){
-    let detail = '';
-    try{ const j = await res.json(); detail = j.error || ''; }catch(_){}
-    throw new Error(detail || ('Sync failed (' + res.status + ')'));
-  }
-  if(method === 'GET') return res.json();
-  return null;
+  let data = null;
+  try{ data = await res.json(); }catch(_){}
+  if(!res.ok) throw new Error((data && data.error) || ('Sync failed (' + res.status + ')'));
+  return data;
 }
+async function apiOp(op, payload){
+  return api('POST', { op, ...payload });
+}
+
+function showImportBanner(local){
+  pendingLocalImport = local;
+  document.getElementById('importBanner').style.display = 'block';
+}
+function hideImportBanner(){
+  pendingLocalImport = null;
+  document.getElementById('importBanner').style.display = 'none';
+}
+
 async function loadState(){
+  let local = null;
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw) applyParsedState(JSON.parse(raw));
-  }catch(e){ /* fresh start */ }
+    if(raw){ local = JSON.parse(raw); applyParsedState(local); }
+  }catch(e){ /* fresh */ }
 
   if(unlocked){
     try{
-      const cloud = await fetchCloud('GET');
-      applyParsedState(cloud);
-      cacheLocal();
-      setSyncNote('Synced across devices', 'ok');
+      const cloud = await api('GET');
+      if(cloud.empty && local && localCount(local) > 0){
+        showImportBanner(local);
+        setSyncNote('Cloud empty — local data available to import', 'warn');
+      } else {
+        hideImportBanner();
+        applyParsedState(cloud);
+        cacheLocal();
+        setSyncNote('Synced to Supabase', 'ok');
+      }
     }catch(e){
       setSyncNote('Offline / sync failed — using local cache. ' + (e.message || ''), 'err');
     }
   }
   render();
 }
-async function saveState(){
+
+async function syncOp(op, payload, okMsg){
   cacheLocal();
   if(!unlocked) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try{
-      await fetchCloud('PUT', state);
-      setSyncNote('Synced across devices', 'ok');
-    }catch(e){
-      setSyncNote('Offline / sync failed — saved locally. ' + (e.message || ''), 'err');
-    }
-  }, 400);
+  try{
+    const res = await apiOp(op, payload);
+    setSyncNote(okMsg || 'Synced to Supabase', 'ok');
+    return res;
+  }catch(e){
+    setSyncNote('Offline / sync failed — saved locally. ' + (e.message || ''), 'err');
+    throw e;
+  }
 }
+
 function showApp(){
   document.getElementById('unlockGate').classList.add('hidden');
   document.getElementById('app').classList.add('ready');
   ['dlDate','mDate','wDate'].forEach(id => {
     const el = document.getElementById(id);
-    if(el && !el.value) el.valueAsDate = new Date();
+    if(el && !el.value) el.value = todayISO();
   });
 }
+
 async function unlockWithPassphrase(pass){
   const status = document.getElementById('unlockStatus');
   status.textContent = 'Unlocking…';
   sessionStorage.setItem(PASS_KEY, pass);
   try{
-    await fetchCloud('GET');
+    await api('GET');
     unlocked = true;
     showApp();
     await loadState();
@@ -315,13 +423,14 @@ async function unlockWithPassphrase(pass){
     status.textContent = e.message || 'Could not unlock';
   }
 }
-function sortByDate(arr){ return [...arr].sort((a,b)=> new Date(a.date)-new Date(b.date)); }
+
+function sortByDate(arr){ return [...arr].sort((a,b)=> localDate(a.date)-localDate(b.date)); }
 
 function rollingSeries(dailyLogs){
   const sorted = sortByDate(dailyLogs);
   return sorted.map(entry => {
-    const windowStart = new Date(entry.date); windowStart.setDate(windowStart.getDate()-6);
-    const inWindow = sorted.filter(e => new Date(e.date) >= windowStart && new Date(e.date) <= new Date(entry.date));
+    const windowStart = addDaysISO(entry.date, -6);
+    const inWindow = sorted.filter(e => e.date >= windowStart && e.date <= entry.date);
     const avg = inWindow.reduce((s,e)=>s+e.weight,0)/inWindow.length;
     return { date: entry.date, weight: entry.weight, aww: avg };
   });
@@ -330,17 +439,15 @@ function rollingSeries(dailyLogs){
 function computeTrend(dailyLogs){
   const series = rollingSeries(dailyLogs);
   if(series.length < 4) return { status:'logging', rate:null };
-  const first = new Date(series[0].date);
-  const last = new Date(series[series.length-1].date);
-  if((last-first)/86400000 < 10) return { status:'logging', rate:null };
+  if(daysBetween(series[0].date, series[series.length-1].date) < 10) return { status:'logging', rate:null };
   const latest = series[series.length-1];
-  const targetDate = new Date(latest.date); targetDate.setDate(targetDate.getDate()-7);
+  const targetDate = addDaysISO(latest.date, -7);
   let closest = series[0], bestDiff = Infinity;
   for(const pt of series){
-    const diff = Math.abs(new Date(pt.date)-targetDate);
+    const diff = Math.abs(daysBetween(pt.date, targetDate));
     if(diff < bestDiff){ bestDiff = diff; closest = pt; }
   }
-  const daysGap = (new Date(latest.date)-new Date(closest.date))/86400000;
+  const daysGap = daysBetween(closest.date, latest.date);
   if(daysGap < 3) return { status:'logging', rate:null };
   const rate = (latest.aww - closest.aww) / (daysGap/7);
   let status;
@@ -354,9 +461,9 @@ function computeTrend(dailyLogs){
 function avgLast7(field){
   const sorted = sortByDate(state.dailyLogs).filter(e=>e[field]!=null);
   if(sorted.length===0) return null;
-  const lastDate = new Date(sorted[sorted.length-1].date);
-  const windowStart = new Date(lastDate); windowStart.setDate(windowStart.getDate()-6);
-  const inWindow = sorted.filter(e=>new Date(e.date)>=windowStart);
+  const lastDate = sorted[sorted.length-1].date;
+  const windowStart = addDaysISO(lastDate, -6);
+  const inWindow = sorted.filter(e=>e.date>=windowStart);
   return inWindow.reduce((s,e)=>s+e[field],0)/inWindow.length;
 }
 
@@ -381,19 +488,23 @@ function verdictCopy(trend){
   return { label:'Hold', color:'var(--sage)', text:`AWW dropping ${Math.abs(rate)} lb/week — right in the 0.4–1.0 zone for protecting muscle while cutting fat. Keep ${cal} kcal.`, actions:[] };
 }
 
-function applyAdjustment(newCal, reason){
+async function applyAdjustment(newCal, reason){
   state.targets.calories = newCal;
-  state.adjustments.push({ date: new Date().toISOString().slice(0,10), calories:newCal, reason });
-  saveState(); render();
+  state.adjustments.push({ date: todayISO(), calories:newCal, reason });
+  document.getElementById('calInput').value = newCal;
+  try{ await syncOp('apply_adjustment', { calories: newCal, reason, date: todayISO() }); }
+  catch(_){ /* local kept */ }
+  render();
 }
 
 function measurementRows(){
   const sorted = sortByDate(state.measurements);
+  const h = state.heightIn || DEFAULT_HEIGHT;
   return sorted.map((m, idx) => {
     const prev = idx>0 ? sorted[idx-1] : null;
     const shWst = (m.shoulder && m.waist) ? m.shoulder/m.waist : null;
     const chWst = (m.chest && m.waist) ? m.chest/m.waist : null;
-    const whtr = m.waist ? m.waist/HEIGHT_IN : null;
+    const whtr = m.waist ? m.waist/h : null;
     const dSh = prev ? m.shoulder-prev.shoulder : null;
     const dWst = prev ? m.waist-prev.waist : null;
     const dCh = prev ? m.chest-prev.chest : null;
@@ -401,9 +512,162 @@ function measurementRows(){
   });
 }
 
+function buildInsights(){
+  const items = [];
+  const today = todayISO();
+  const yesterday = addDaysISO(today, -1);
+  const dates = new Set(state.dailyLogs.map(d=>d.date));
+  const missed = [];
+  for(let i=0;i<14;i++){
+    const d = addDaysISO(today, -i);
+    if(!dates.has(d)) missed.push(d);
+  }
+  if(!dates.has(today)){
+    items.push({ sev:'warn', label:'Gap', text:`No weigh-in logged for today (${today}).`, tab:'daily', scroll:'dailyFormCard' });
+  } else if(!dates.has(yesterday)){
+    items.push({ sev:'info', label:'Gap', text:`Yesterday (${yesterday}) has no daily log.`, tab:'daily', scroll:'dailyFormCard' });
+  }
+  if(missed.length >= 3){
+    items.push({ sev:'warn', label:'Missed', text:`${missed.length} missing daily logs in the last 14 days.`, tab:'daily', scroll:'dailyFormCard' });
+  }
+
+  const trend = computeTrend(state.dailyLogs);
+  if(trend.status==='too_fast'){
+    items.push({ sev:'bad', label:'Trend', text:`AWW dropping too fast (${trend.rate.toFixed(2)} lb/wk). Consider adding calories.`, tab:'daily', scroll:'verdictCard' });
+  } else if(trend.status==='gaining'){
+    items.push({ sev:'bad', label:'Trend', text:`AWW trending up (${trend.rate.toFixed(2)} lb/wk). Cut back or check logging accuracy.`, tab:'daily', scroll:'verdictCard' });
+  } else if(trend.status==='plateau'){
+    items.push({ sev:'warn', label:'Trend', text:'AWW plateau — maintenance may have crept up.', tab:'daily', scroll:'verdictCard' });
+  } else if(trend.status==='on_track'){
+    items.push({ sev:'ok', label:'On track', text:`AWW rate ${trend.rate.toFixed(2)} lb/wk is in the recomp band.`, tab:'daily', scroll:'verdictCard' });
+  }
+
+  const avgPro = avgLast7('protein');
+  if(avgPro != null && avgPro < state.targets.protein * 0.9){
+    items.push({ sev:'warn', label:'Protein', text:`7-day protein avg ${Math.round(avgPro)}g is below target ${state.targets.protein}g.`, tab:'daily', scroll:'dailyFormCard' });
+  }
+
+  const weekAgo = addDaysISO(today, -7);
+  const recentWorkouts = state.workouts.filter(w=>w.date >= weekAgo).length;
+  if(recentWorkouts === 0){
+    items.push({ sev:'warn', label:'Training', text:'No workouts logged in the last 7 days.', tab:'workout', scroll:'workoutFormCard' });
+  }
+
+  const mSorted = sortByDate(state.measurements);
+  if(mSorted.length === 0){
+    items.push({ sev:'info', label:'Tape', text:'No measurements yet — weekly shoulder/waist/chest helps confirm recomp.', tab:'meas', scroll:'measFormCard' });
+  } else {
+    const daysSince = daysBetween(mSorted[mSorted.length-1].date, today);
+    if(daysSince > 10){
+      items.push({ sev:'warn', label:'Tape', text:`Last measurement was ${daysSince} days ago (${mSorted[mSorted.length-1].date}).`, tab:'meas', scroll:'measFormCard' });
+    }
+  }
+
+  if(items.length === 0){
+    items.push({ sev:'ok', label:'Clear', text:'No alerts — keep logging.', tab:'daily', scroll:'dailyFormCard' });
+  }
+  return items;
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+}
+
+function goInsight(item){
+  if(item.tab) switchTab(item.tab === 'history' ? 'history' : item.tab);
+  const el = document.getElementById(item.scroll);
+  if(el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+function chartOpts(){
+  return {
+    responsive:true,
+    plugins:{ legend:{ labels:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10} } } },
+    scales:{
+      x:{ ticks:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10}, maxTicksLimit:8 }, grid:{ color:'#3A3733' } },
+      y:{ ticks:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10} }, grid:{ color:'#3A3733' } }
+    }
+  };
+}
+
+function renderCharts(){
+  const dlSorted = sortByDate(state.dailyLogs);
+  const series = rollingSeries(state.dailyLogs);
+  const wEmpty = document.getElementById('chartWeightEmpty');
+  const wCanvas = document.getElementById('chartWeight');
+  if(dlSorted.length < 2){
+    wEmpty.style.display='block'; wCanvas.style.display='none';
+    if(chartWeight){ chartWeight.destroy(); chartWeight=null; }
+  } else {
+    wEmpty.style.display='none'; wCanvas.style.display='block';
+    if(chartWeight) chartWeight.destroy();
+    chartWeight = new Chart(wCanvas, {
+      type:'line',
+      data:{ labels: series.map(s=>s.date), datasets:[
+        { label:'Daily weight', data: series.map(s=>s.weight), showLine:false, pointRadius:2, pointBackgroundColor:'#9B948A' },
+        { label:'7-day avg (AWW)', data: series.map(s=>s.aww), borderColor:'#7C8F6E', backgroundColor:'rgba(124,143,110,0.12)', fill:true, tension:0.25, pointRadius:0 }
+      ]},
+      options: chartOpts()
+    });
+  }
+
+  const withCals = dlSorted.filter(d=>d.calories!=null).slice(-28);
+  const cEmpty = document.getElementById('chartCalsEmpty');
+  const cCanvas = document.getElementById('chartCals');
+  if(withCals.length < 2){
+    cEmpty.style.display='block'; cCanvas.style.display='none';
+    if(chartCals){ chartCals.destroy(); chartCals=null; }
+  } else {
+    cEmpty.style.display='none'; cCanvas.style.display='block';
+    if(chartCals) chartCals.destroy();
+    chartCals = new Chart(cCanvas, {
+      type:'line',
+      data:{ labels: withCals.map(d=>d.date), datasets:[
+        { label:'Calories', data: withCals.map(d=>d.calories), borderColor:'#B08D57', tension:0.2, pointRadius:2 },
+        { label:'Target', data: withCals.map(()=>state.targets.calories), borderColor:'#7C8F6E', borderDash:[4,4], pointRadius:0 }
+      ]},
+      options: chartOpts()
+    });
+  }
+
+  const mSorted = sortByDate(state.measurements);
+  const mEmpty = document.getElementById('chartMeasEmpty');
+  const mCanvas = document.getElementById('chartMeas');
+  if(mSorted.length < 2){
+    mEmpty.style.display='block'; mCanvas.style.display='none';
+    if(chartMeas){ chartMeas.destroy(); chartMeas=null; }
+  } else {
+    mEmpty.style.display='none'; mCanvas.style.display='block';
+    if(chartMeas) chartMeas.destroy();
+    chartMeas = new Chart(mCanvas, {
+      type:'line',
+      data:{ labels: mSorted.map(m=>m.date), datasets:[
+        { label:'Waist', data: mSorted.map(m=>m.waist), borderColor:'#C1502E', tension:0.2, pointRadius:2 },
+        { label:'Shoulder', data: mSorted.map(m=>m.shoulder), borderColor:'#7C8F6E', tension:0.2, pointRadius:2 },
+        { label:'Chest', data: mSorted.map(m=>m.chest), borderColor:'#B08D57', tension:0.2, pointRadius:2 }
+      ]},
+      options: chartOpts()
+    });
+  }
+}
+
 function render(){
   document.getElementById('calTarget').textContent = state.targets.calories;
   document.getElementById('proTarget').textContent = state.targets.protein;
+  document.getElementById('heightInput').value = state.heightIn;
+  document.getElementById('calInput').value = state.targets.calories;
+  document.getElementById('proInput').value = state.targets.protein;
+
+  const insightsEl = document.getElementById('insights');
+  insightsEl.innerHTML = '';
+  buildInsights().forEach(item=>{
+    const div = document.createElement('div');
+    div.className = 'insight ' + item.sev;
+    div.innerHTML = `<span class="sev">${item.label}</span><span>${item.text}</span>`;
+    div.onclick = () => goInsight(item);
+    insightsEl.appendChild(div);
+  });
 
   const trend = computeTrend(state.dailyLogs);
   const stampEl = document.getElementById('stamp');
@@ -429,10 +693,11 @@ function render(){
     const latestAWW = series[series.length-1].aww.toFixed(1);
     const avgCal = avgLast7('calories'); const avgPro = avgLast7('protein');
     document.getElementById('targetMeta').textContent =
-      `AWW: ${latestAWW} lb · Last 7d avg: ${avgCal?Math.round(avgCal):'—'} kcal, ${avgPro?Math.round(avgPro):'—'}g protein`;
+      `AWW: ${latestAWW} lb · Last 7d avg: ${avgCal?Math.round(avgCal):'—'} kcal, ${avgPro?Math.round(avgPro):'—'}g protein · Height ${state.heightIn}"`;
   }
 
-  // Daily log table + chart
+  renderCharts();
+
   const dlSorted = sortByDate(state.dailyLogs);
   const series = rollingSeries(state.dailyLogs);
   const dlBody = document.getElementById('dlBody');
@@ -445,28 +710,6 @@ function render(){
     dlBody.appendChild(tr);
   });
 
-  const chartEmpty = document.getElementById('chartEmpty');
-  const canvas = document.getElementById('chart');
-  if(dlSorted.length < 2){
-    chartEmpty.style.display='block'; canvas.style.display='none';
-    if(chart){ chart.destroy(); chart=null; }
-  } else {
-    chartEmpty.style.display='none'; canvas.style.display='block';
-    const labels = series.map(s=>s.date);
-    if(chart) chart.destroy();
-    chart = new Chart(canvas, {
-      type:'line',
-      data:{ labels, datasets:[
-        { label:'Daily weight', data: series.map(s=>s.weight), showLine:false, pointRadius:2, pointBackgroundColor:'#9B948A' },
-        { label:'7-day avg (AWW)', data: series.map(s=>s.aww), borderColor:'#7C8F6E', backgroundColor:'rgba(124,143,110,0.12)', fill:true, tension:0.25, pointRadius:0 }
-      ]},
-      options:{ responsive:true, plugins:{ legend:{ labels:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10} } } },
-        scales:{ x:{ ticks:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10} }, grid:{ color:'#3A3733' } },
-                 y:{ ticks:{ color:'#9B948A', font:{family:'IBM Plex Mono', size:10} }, grid:{ color:'#3A3733' } } } }
-    });
-  }
-
-  // Measurements
   const mRows = measurementRows();
   const mBody = document.getElementById('mBody');
   mBody.innerHTML='';
@@ -500,7 +743,6 @@ function render(){
     items.forEach(t=>{ const d = document.createElement('div'); d.className='ratio-item'; d.innerHTML=t; ratioBox.appendChild(d); });
   }
 
-  // Workouts
   const wSorted = sortByDate(state.workouts);
   const wBody = document.getElementById('wBody');
   wBody.innerHTML='';
@@ -510,10 +752,26 @@ function render(){
     tr.innerHTML = `<td>${w.date}</td><td>${w.split||''}</td><td>${w.exercise||''}</td><td>${w.weight??'—'}</td><td>${w.sets??'—'}</td><td>${w.reps??'—'}</td><td>${w.notes||''}</td><td><button class="rowbtn" onclick="editWorkout('${w.id}')">Edit</button> <button class="rowbtn danger" onclick="deleteWorkout('${w.id}')">Del</button></td>`;
     wBody.appendChild(tr);
   });
-  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-  const recentCount = state.workouts.filter(w=>new Date(w.date) >= weekAgo).length;
+  const weekAgo = addDaysISO(todayISO(), -7);
+  const recentCount = state.workouts.filter(w=>w.date >= weekAgo).length;
   document.getElementById('workoutWeekCount').textContent = `${recentCount} workout${recentCount===1?'':'s'} logged in the last 7 days`;
+
+  const adjSorted = sortByDate(state.adjustments);
+  const adjBody = document.getElementById('adjBody');
+  adjBody.innerHTML='';
+  document.getElementById('adjEmpty').style.display = adjSorted.length? 'none':'block';
+  [...adjSorted].reverse().forEach(a=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${a.date}</td><td>${a.calories}</td><td>${a.reason||''}</td>`;
+    adjBody.appendChild(tr);
+  });
 }
+
+document.getElementById('logTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.tab');
+  if(!btn) return;
+  switchTab(btn.dataset.tab);
+});
 
 document.getElementById('dlSaveBtn').onclick = async () => {
   const date = document.getElementById('dlDate').value;
@@ -524,10 +782,13 @@ document.getElementById('dlSaveBtn').onclick = async () => {
   const fat = document.getElementById('dlFat').value ? parseFloat(document.getElementById('dlFat').value) : null;
   const statusEl = document.getElementById('dlStatus');
   if(!date || isNaN(weight)){ statusEl.textContent='Need date and weight.'; return; }
+  const row = { date, weight, calories, protein, carbs, fat };
   state.dailyLogs = state.dailyLogs.filter(e=>e.date!==date);
-  state.dailyLogs.push({ date, weight, calories, protein, carbs, fat });
-  await saveState();
-  statusEl.textContent='Saved.';
+  state.dailyLogs.push(row);
+  try{
+    await syncOp('upsert_daily', { row });
+    statusEl.textContent='Saved to cloud.';
+  }catch(_){ statusEl.textContent='Saved locally (sync failed).'; }
   ['dlCalories','dlProtein','dlCarbs','dlFat'].forEach(id=>document.getElementById(id).value='');
   render();
 };
@@ -535,6 +796,7 @@ document.getElementById('dlSaveBtn').onclick = async () => {
 function editDailyLog(date){
   const e = state.dailyLogs.find(x=>x.date===date);
   if(!e) return;
+  switchTab('daily');
   document.getElementById('dlDate').value = e.date;
   document.getElementById('dlWeight').value = e.weight ?? '';
   document.getElementById('dlCalories').value = e.calories ?? '';
@@ -542,13 +804,14 @@ function editDailyLog(date){
   document.getElementById('dlCarbs').value = e.carbs ?? '';
   document.getElementById('dlFat').value = e.fat ?? '';
   document.getElementById('dlStatus').textContent = `Editing ${date} — change values and hit Save Day to update.`;
-  document.getElementById('dlDate').scrollIntoView({ behavior:'smooth', block:'center' });
+  document.getElementById('dailyFormCard').scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
-function deleteDailyLog(date){
+async function deleteDailyLog(date){
   if(!confirm(`Delete daily log for ${date}?`)) return;
   state.dailyLogs = state.dailyLogs.filter(e=>e.date!==date);
-  saveState(); render();
+  try{ await syncOp('delete_daily', { date }); }catch(_){}
+  render();
 }
 
 document.getElementById('mSaveBtn').onclick = async () => {
@@ -559,10 +822,13 @@ document.getElementById('mSaveBtn').onclick = async () => {
   const notes = document.getElementById('mNotes').value.trim();
   const statusEl = document.getElementById('mStatus');
   if(!date || isNaN(shoulder) || isNaN(waist) || isNaN(chest)){ statusEl.textContent='Need date, shoulder, waist, and chest.'; return; }
+  const row = { date, shoulder, waist, chest, notes };
   state.measurements = state.measurements.filter(e=>e.date!==date);
-  state.measurements.push({ date, shoulder, waist, chest, notes });
-  await saveState();
-  statusEl.textContent='Saved.';
+  state.measurements.push(row);
+  try{
+    await syncOp('upsert_measurement', { row });
+    statusEl.textContent='Saved to cloud.';
+  }catch(_){ statusEl.textContent='Saved locally (sync failed).'; }
   document.getElementById('mNotes').value='';
   render();
 };
@@ -570,19 +836,21 @@ document.getElementById('mSaveBtn').onclick = async () => {
 function editMeasurement(date){
   const m = state.measurements.find(x=>x.date===date);
   if(!m) return;
+  switchTab('meas');
   document.getElementById('mDate').value = m.date;
   document.getElementById('mShoulder').value = m.shoulder ?? '';
   document.getElementById('mWaist').value = m.waist ?? '';
   document.getElementById('mChest').value = m.chest ?? '';
   document.getElementById('mNotes').value = m.notes || '';
   document.getElementById('mStatus').textContent = `Editing ${date} — change values and hit Save Measurements to update.`;
-  document.getElementById('mDate').scrollIntoView({ behavior:'smooth', block:'center' });
+  document.getElementById('measFormCard').scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
-function deleteMeasurement(date){
+async function deleteMeasurement(date){
   if(!confirm(`Delete measurements for ${date}?`)) return;
   state.measurements = state.measurements.filter(e=>e.date!==date);
-  saveState(); render();
+  try{ await syncOp('delete_measurement', { date }); }catch(_){}
+  render();
 }
 
 document.getElementById('wSaveBtn').onclick = async () => {
@@ -595,17 +863,27 @@ document.getElementById('wSaveBtn').onclick = async () => {
   const notes = document.getElementById('wNotes').value.trim();
   const statusEl = document.getElementById('wStatus');
   if(!date || !split){ statusEl.textContent='Need at least a date and split.'; return; }
+  let row;
   if(editingWorkoutId){
     const idx = state.workouts.findIndex(w=>w.id===editingWorkoutId);
-    if(idx>-1) state.workouts[idx] = { ...state.workouts[idx], date, split, exercise, weight, sets, reps, notes };
-    statusEl.textContent='Updated.';
+    row = { id: editingWorkoutId, date, split, exercise, weight, sets, reps, notes };
+    if(idx>-1) state.workouts[idx] = row;
     cancelWorkoutEdit(true);
+    statusEl.textContent='Updated.';
   } else {
     const id = (crypto.randomUUID ? crypto.randomUUID() : 'w-'+Date.now()+'-'+Math.random().toString(36).slice(2));
-    state.workouts.push({ id, date, split, exercise, weight, sets, reps, notes });
+    row = { id, date, split, exercise, weight, sets, reps, notes };
+    state.workouts.push(row);
     statusEl.textContent='Logged.';
   }
-  await saveState();
+  try{
+    const res = await syncOp('upsert_workout', { row });
+    if(res && res.id && row.id !== res.id){
+      const idx = state.workouts.findIndex(w=>w.id===row.id);
+      if(idx>-1) state.workouts[idx].id = res.id;
+    }
+    statusEl.textContent = (statusEl.textContent||'Saved') + ' (cloud)';
+  }catch(_){ statusEl.textContent = (statusEl.textContent||'Saved') + ' locally'; }
   ['wExercise','wWeight','wSets','wReps','wNotes'].forEach(id=>document.getElementById(id).value='');
   render();
 };
@@ -613,6 +891,7 @@ document.getElementById('wSaveBtn').onclick = async () => {
 function editWorkout(id){
   const w = state.workouts.find(x=>x.id===id);
   if(!w) return;
+  switchTab('workout');
   editingWorkoutId = id;
   document.getElementById('wDate').value = w.date;
   document.getElementById('wSplit').value = w.split || '';
@@ -624,7 +903,7 @@ function editWorkout(id){
   document.getElementById('wSaveBtn').textContent = 'Update Workout';
   document.getElementById('wCancelBtn').style.display = 'inline-block';
   document.getElementById('wStatus').textContent = `Editing workout from ${w.date}.`;
-  document.getElementById('wDate').scrollIntoView({ behavior:'smooth', block:'center' });
+  document.getElementById('workoutFormCard').scrollIntoView({ behavior:'smooth', block:'center' });
 }
 
 function cancelWorkoutEdit(skipStatusClear){
@@ -638,17 +917,68 @@ document.getElementById('wCancelBtn').onclick = () => {
   ['wSplit','wExercise','wWeight','wSets','wReps','wNotes'].forEach(id=>document.getElementById(id).value='');
 };
 
-function deleteWorkout(id){
+async function deleteWorkout(id){
   if(!confirm('Delete this workout entry?')) return;
   state.workouts = state.workouts.filter(w=>w.id!==id);
   if(editingWorkoutId===id) cancelWorkoutEdit();
-  saveState(); render();
+  try{ await syncOp('delete_workout', { id }); }catch(_){}
+  render();
 }
+
+document.getElementById('settingsSaveBtn').onclick = async () => {
+  const heightIn = parseFloat(document.getElementById('heightInput').value);
+  const calories = parseInt(document.getElementById('calInput').value, 10);
+  const protein = parseInt(document.getElementById('proInput').value, 10);
+  const statusEl = document.getElementById('settingsStatus');
+  if(isNaN(heightIn) || isNaN(calories) || isNaN(protein)){ statusEl.textContent='Need valid height, calories, and protein.'; return; }
+  state.heightIn = heightIn;
+  state.targets = { calories, protein };
+  try{
+    await syncOp('update_settings', { heightIn, calories, protein });
+    statusEl.textContent='Settings saved.';
+  }catch(_){ statusEl.textContent='Saved locally (sync failed).'; }
+  render();
+};
+
+document.getElementById('importLocalBtn').onclick = async () => {
+  if(!pendingLocalImport) return;
+  try{
+    const cloud = await apiOp('import_state', { state: pendingLocalImport });
+    applyParsedState(cloud);
+    cacheLocal();
+    hideImportBanner();
+    setSyncNote('Imported local data to Supabase', 'ok');
+    render();
+  }catch(e){
+    setSyncNote('Import failed: ' + (e.message||''), 'err');
+  }
+};
+document.getElementById('dismissImportBtn').onclick = async () => {
+  hideImportBanner();
+  try{
+    const cloud = await api('GET');
+    applyParsedState(cloud);
+    cacheLocal();
+    setSyncNote('Synced to Supabase', 'ok');
+    render();
+  }catch(e){
+    setSyncNote(e.message||'Sync failed', 'err');
+  }
+};
 
 document.getElementById('resetBtn').onclick = async () => {
   if(!confirm('This clears every logged entry and resets targets to 2,600 kcal / 200g protein. Sure?')) return;
-  state = { dailyLogs:[], measurements:[], workouts:[], targets:{...DEFAULT_TARGETS}, adjustments:[] };
-  await saveState(); render();
+  try{
+    const cloud = await apiOp('reset', {});
+    applyParsedState(cloud);
+    cacheLocal();
+    setSyncNote('Reset complete', 'ok');
+  }catch(e){
+    state = { dailyLogs:[], measurements:[], workouts:[], targets:{...DEFAULT_TARGETS}, adjustments:[], heightIn: DEFAULT_HEIGHT };
+    cacheLocal();
+    setSyncNote('Reset locally; cloud reset failed. ' + (e.message||''), 'err');
+  }
+  render();
 };
 
 function downloadFile(filename, content, mime){
@@ -659,7 +989,6 @@ function downloadFile(filename, content, mime){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
 function toCSV(rows, headers){
   const esc = v => {
     if(v===null||v===undefined) return '';
@@ -674,11 +1003,9 @@ function toCSV(rows, headers){
 document.getElementById('exportJsonBtn').onclick = () => {
   downloadFile('recomp-ledger-backup.json', JSON.stringify(state, null, 2), 'application/json');
 };
-
 document.getElementById('exportCsvBtn').onclick = () => {
   const dl = sortByDate(state.dailyLogs);
-  const dlCsv = toCSV(dl, ['date','weight','calories','protein','carbs','fat']);
-
+  downloadFile('daily-log.csv', toCSV(dl, ['date','weight','calories','protein','carbs','fat']), 'text/csv');
   const mRows = measurementRows().map(m => ({
     date: m.date, shoulder: m.shoulder, waist: m.waist, chest: m.chest,
     shoulder_waist_ratio: m.shWst ? m.shWst.toFixed(2) : '',
@@ -686,14 +1013,8 @@ document.getElementById('exportCsvBtn').onclick = () => {
     waist_height_ratio: m.whtr ? m.whtr.toFixed(2) : '',
     notes: m.notes || ''
   }));
-  const mCsv = toCSV(mRows, ['date','shoulder','waist','chest','shoulder_waist_ratio','chest_waist_ratio','waist_height_ratio','notes']);
-
-  const w = sortByDate(state.workouts);
-  const wCsv = toCSV(w, ['date','split','exercise','weight','sets','reps','notes']);
-
-  downloadFile('daily-log.csv', dlCsv, 'text/csv');
-  setTimeout(()=>downloadFile('measurements.csv', mCsv, 'text/csv'), 300);
-  setTimeout(()=>downloadFile('workouts.csv', wCsv, 'text/csv'), 600);
+  setTimeout(()=>downloadFile('measurements.csv', toCSV(mRows, ['date','shoulder','waist','chest','shoulder_waist_ratio','chest_waist_ratio','waist_height_ratio','notes']), 'text/csv'), 300);
+  setTimeout(()=>downloadFile('workouts.csv', toCSV(sortByDate(state.workouts), ['date','split','exercise','weight','sets','reps','notes']), 'text/csv'), 600);
 };
 
 document.getElementById('unlockBtn').onclick = () => {

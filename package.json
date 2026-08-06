@@ -1,7 +1,11 @@
 {
   "name": "project-hercules",
   "private": true,
-  "dependencies": {
-    "@netlify/blobs": "^9.1.2"
+  "scripts": {
+    "dev": "npx --yes serve . -p 3456",
+    "start": "npx --yes serve . -p 3456"
+  },
+  "devDependencies": {
+    "supabase": "^2.111.0"
   }
 }
