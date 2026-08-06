@@ -5,3 +5,10 @@
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
+
+# Same-origin proxy — avoids browser CORS preflight to Supabase Edge Functions
+[[redirects]]
+  from = "/api/ledger"
+  to = "https://wfvwciawsbsekkypzzwd.supabase.co/functions/v1/ledger"
+  status = 200
+  force = true
