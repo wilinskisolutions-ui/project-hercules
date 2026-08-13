@@ -13,7 +13,7 @@ const DEFAULT_HEIGHT = 75;
 const DEFAULT_GOAL_RATE = -0.5;
 const DEFAULT_GOAL_MODE = "recomp";
 const GOAL_MODES = new Set(["cut", "recomp", "bulk"]);
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
