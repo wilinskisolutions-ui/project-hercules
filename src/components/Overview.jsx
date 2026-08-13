@@ -1,31 +1,66 @@
-import { averageRecent, buildInsights, computeTrend, rollingSeries } from '../lib/ledger'
+import { useState } from 'react'
+import {
+  averageRecent,
+  buildInsights,
+  computeTrend,
+  rollingSeries,
+  suggestCalories,
+} from '../lib/ledger'
 import { useLedger } from '../state/LedgerContext'
 
 function trendCopy(trend) {
-  if (trend.status === 'too_fast') return ['Reduce the pace', 'Weight is dropping faster than the muscle-preserving range.']
-  if (trend.status === 'gaining') return ['Course correct', 'Your average is moving up. Review intake accuracy and target.']
-  if (trend.status === 'plateau') return ['Plateau detected', 'Your average has been flat across multiple weeks.']
-  if (trend.status === 'on_track') return ['On track', 'Your average is moving through the recomp target range.']
+  if (trend.status === 'too_fast') {
+    return ['Reduce the pace', 'Average weekly weight is changing faster than your goal rate.']
+  }
+  if (trend.status === 'too_slow') {
+    return ['Nudge the target', 'Average weekly weight is lagging your goal rate.']
+  }
+  if (trend.status === 'wrong_direction') {
+    return ['Course correct', 'Average weekly weight is moving opposite your goal.']
+  }
+  if (trend.status === 'on_track') {
+    return ['On track', 'Your average is tracking the goal rate band.']
+  }
   return ['Building signal', 'Keep logging daily. A reliable trend needs about 10 days.']
+}
+
+function formatRate(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const number = Number(value)
+  return `${number > 0 ? '+' : ''}${number.toFixed(2)} lb / week`
 }
 
 export function Overview({ ledger, onNavigate }) {
   const { actions } = useLedger()
   const series = rollingSeries(ledger.dailyLogs)
   const latest = series.at(-1)
-  const trend = computeTrend(ledger.dailyLogs)
+  const trend = computeTrend(ledger.dailyLogs, ledger.goals.rateLbWeek)
   const [trendTitle, trendText] = trendCopy(trend)
   const averageCalories = averageRecent(ledger.dailyLogs, 'calories')
   const averageProtein = averageRecent(ledger.dailyLogs, 'protein')
   const insights = buildInsights(ledger)
-  const suggestedCalories =
-    trend.status === 'too_fast'
-      ? ledger.targets.calories + 125
-      : trend.status === 'plateau'
-        ? ledger.targets.calories - 125
-        : trend.status === 'gaining'
-          ? ledger.targets.calories - 150
-          : null
+  const suggestedCalories = suggestCalories(ledger.targets.calories, trend)
+  const [aiState, setAiState] = useState({ status: 'idle', advice: '', error: '', model: '' })
+
+  async function runAnalyze() {
+    setAiState({ status: 'loading', advice: '', error: '', model: '' })
+    try {
+      const result = await actions.analyze()
+      setAiState({
+        status: 'ready',
+        advice: result.advice || '',
+        error: '',
+        model: result.model || '',
+      })
+    } catch (error) {
+      setAiState({
+        status: 'error',
+        advice: '',
+        error: error.message || 'Analysis failed',
+        model: '',
+      })
+    }
+  }
 
   return (
     <>
@@ -41,14 +76,19 @@ export function Overview({ ledger, onNavigate }) {
           <span>Current read</span>
           <strong>{trendTitle}</strong>
           <p>{trendText}</p>
-          {trend.rate != null && <b>{trend.rate > 0 ? '+' : ''}{trend.rate.toFixed(2)} lb / week</b>}
+          {trend.rate != null && (
+            <b>
+              {formatRate(trend.rate)}
+              <span className="verdict-goal"> · goal {formatRate(trend.goalRate)}</span>
+            </b>
+          )}
           {suggestedCalories && (
             <button
               className="verdict-action"
               onClick={() =>
                 actions.applyAdjustment(
                   suggestedCalories,
-                  `AWW ${trend.status.replace('_', ' ')} at ${trend.rate.toFixed(2)} lb/week`,
+                  `AWW ${trend.rate.toFixed(2)} vs goal ${Number(trend.goalRate).toFixed(2)} lb/week (${trend.status.replaceAll('_', ' ')})`,
                 )
               }
             >
@@ -75,9 +115,12 @@ export function Overview({ ledger, onNavigate }) {
           <p>{averageProtein ? `${Math.round(averageProtein)}g recent average` : 'Waiting for nutrition logs'}</p>
         </article>
         <article className="metric">
-          <span>Training volume</span>
-          <strong>{ledger.workouts.length} <small>sessions</small></strong>
-          <p>All-time logged workouts</p>
+          <span>Goal rate</span>
+          <strong>{formatRate(ledger.goals.rateLbWeek).replace(' lb / week', '')} <small>lb/wk</small></strong>
+          <p>
+            {ledger.goals.mode}
+            {ledger.goals.weightLb != null ? ` · goal ${ledger.goals.weightLb} lb` : ''}
+          </p>
         </article>
       </section>
 
@@ -101,7 +144,35 @@ export function Overview({ ledger, onNavigate }) {
           ))}
         </div>
       </section>
+
+      <section className="panel ai-coach">
+        <div className="section-heading">
+          <div>
+            <span>Gemini coach</span>
+            <h2>Trend analysis</h2>
+          </div>
+          <button
+            className="primary"
+            disabled={aiState.status === 'loading'}
+            onClick={runAnalyze}
+          >
+            {aiState.status === 'loading' ? 'Analyzing…' : 'Analyze trends'}
+          </button>
+        </div>
+        {!ledger.hasGeminiKey && (
+          <p className="ai-hint">
+            Add a Gemini API key under Targets to enable AI coaching.
+            <button className="quiet" type="button" onClick={() => onNavigate('settings')}>Open Targets</button>
+          </p>
+        )}
+        {aiState.error && <p className="form-status error">{aiState.error}</p>}
+        {aiState.advice && (
+          <div className="ai-advice">
+            <p>{aiState.advice}</p>
+            {aiState.model && <small>Model: {aiState.model}</small>}
+          </div>
+        )}
+      </section>
     </>
   )
 }
-

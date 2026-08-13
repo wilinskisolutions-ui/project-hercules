@@ -10,6 +10,10 @@ const corsHeaders: Record<string, string> = {
 
 const DEFAULT_TARGETS = { calories: 2600, protein: 200 };
 const DEFAULT_HEIGHT = 75;
+const DEFAULT_GOAL_RATE = -0.5;
+const DEFAULT_GOAL_MODE = "recomp";
+const GOAL_MODES = new Set(["cut", "recomp", "bulk"]);
+const GEMINI_MODEL = "gemini-2.0-flash";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -134,12 +138,20 @@ function mapDaily(row: Record<string, unknown>) {
   };
 }
 
+function optionalMeasure(value: unknown) {
+  return value == null ? null : Number(value);
+}
+
 function mapMeasurement(row: Record<string, unknown>) {
   return {
     date: row.date,
     shoulder: Number(row.shoulder),
     waist: Number(row.waist),
     chest: Number(row.chest),
+    arm: optionalMeasure(row.arm),
+    thigh: optionalMeasure(row.thigh),
+    hip: optionalMeasure(row.hip),
+    neck: optionalMeasure(row.neck),
     notes: (row.notes as string) || "",
   };
 }
@@ -167,11 +179,28 @@ function mapAdjustment(row: Record<string, unknown>) {
   };
 }
 
+function mapGoals(settings: Record<string, unknown> | null) {
+  const mode =
+    typeof settings?.goal_mode === "string" && GOAL_MODES.has(settings.goal_mode)
+      ? settings.goal_mode
+      : DEFAULT_GOAL_MODE;
+  return {
+    weightLb: settings?.goal_weight_lb == null ? null : Number(settings.goal_weight_lb),
+    rateLbWeek:
+      settings?.goal_rate_lb_week == null
+        ? DEFAULT_GOAL_RATE
+        : Number(settings.goal_rate_lb_week),
+    mode,
+  };
+}
+
 async function bootstrap(supabase: SupabaseClient) {
   const [settingsRes, dailyRes, measRes, workoutRes, adjRes] = await Promise.all([
     supabase
       .from("settings")
-      .select("calories_target, protein_target, height_in")
+      .select(
+        "calories_target, protein_target, height_in, goal_weight_lb, goal_rate_lb_week, goal_mode, gemini_api_key",
+      )
       .eq("id", 1)
       .maybeSingle(),
     supabase.from("daily_logs").select("*").order("date", { ascending: true }),
@@ -201,6 +230,8 @@ async function bootstrap(supabase: SupabaseClient) {
       protein: settings?.protein_target ?? DEFAULT_TARGETS.protein,
     },
     heightIn: settings?.height_in != null ? Number(settings.height_in) : DEFAULT_HEIGHT,
+    goals: mapGoals(settings),
+    hasGeminiKey: Boolean(settings?.gemini_api_key),
     adjustments: (adjRes.data || []).map(mapAdjustment),
     empty,
   };
@@ -226,6 +257,10 @@ async function upsertMeasurement(supabase: SupabaseClient, row: Record<string, u
     shoulder: numberValue(row.shoulder, "shoulder", { min: 1, max: 200 }),
     waist: numberValue(row.waist, "waist", { min: 1, max: 200 }),
     chest: numberValue(row.chest, "chest", { min: 1, max: 200 }),
+    arm: numberValue(row.arm, "arm", { optional: true, min: 1, max: 200 }),
+    thigh: numberValue(row.thigh, "thigh", { optional: true, min: 1, max: 200 }),
+    hip: numberValue(row.hip, "hip", { optional: true, min: 1, max: 200 }),
+    neck: numberValue(row.neck, "neck", { optional: true, min: 1, max: 200 }),
     notes: optionalString(row.notes, "notes"),
     updated_at: new Date().toISOString(),
   };
@@ -251,7 +286,6 @@ async function upsertWorkout(supabase: SupabaseClient, row: Record<string, unkno
     notes: optionalString(row.notes, "notes"),
     updated_at: new Date().toISOString(),
   };
-  // Legacy local IDs like "w-123" are not valid Postgres uuids — omit so DB generates one.
   if (isUuid(row.id)) payload.id = row.id;
   const { data, error } = await supabase
     .from("workouts")
@@ -273,6 +307,32 @@ async function updateSettings(supabase: SupabaseClient, body: Record<string, unk
   }
   if (body.heightIn != null) {
     patch.height_in = numberValue(body.heightIn, "heightIn", { min: 24, max: 120 });
+  }
+  if (body.goalWeightLb !== undefined) {
+    patch.goal_weight_lb = numberValue(body.goalWeightLb, "goalWeightLb", {
+      optional: true,
+      min: 40,
+      max: 1_000,
+    });
+  }
+  if (body.goalRateLbWeek != null) {
+    patch.goal_rate_lb_week = numberValue(body.goalRateLbWeek, "goalRateLbWeek", {
+      min: -5,
+      max: 5,
+    });
+  }
+  if (body.goalMode != null) {
+    const mode = requiredString(body.goalMode, "goalMode", 20);
+    if (!GOAL_MODES.has(mode)) {
+      throw new ApiError(400, "VALIDATION_ERROR", "goalMode must be cut, recomp, or bulk");
+    }
+    patch.goal_mode = mode;
+  }
+  if (body.clearGeminiKey === true) {
+    patch.gemini_api_key = null;
+  } else if (body.geminiApiKey != null) {
+    const key = requiredString(body.geminiApiKey, "geminiApiKey", 200);
+    patch.gemini_api_key = key;
   }
   if (body.targets && typeof body.targets === "object") {
     const t = body.targets as Record<string, unknown>;
@@ -343,9 +403,134 @@ async function resetAll(supabase: SupabaseClient) {
   if (error) throw error;
 }
 
+function summarizeForAi(payload: Awaited<ReturnType<typeof bootstrap>>) {
+  const logs = payload.dailyLogs.slice(-28);
+  const measurements = payload.measurements.slice(-8);
+  const workouts = payload.workouts.slice(-14);
+  const adjustments = payload.adjustments.slice(-8);
+  const weights = logs.map((row) => Number(row.weight));
+  const avg = (values: number[]) =>
+    values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  const calories = logs
+    .map((row) => row.calories)
+    .filter((value): value is number => value != null)
+    .map(Number);
+  const protein = logs
+    .map((row) => row.protein)
+    .filter((value): value is number => value != null)
+    .map(Number);
+
+  return {
+    goals: payload.goals,
+    targets: payload.targets,
+    heightIn: payload.heightIn,
+    recentDailyLogs: logs,
+    recentMeasurements: measurements,
+    recentWorkouts: workouts.map((row) => ({
+      date: row.date,
+      split: row.split,
+      exercise: row.exercise,
+      weight: row.weight,
+      sets: row.sets,
+      reps: row.reps,
+    })),
+    recentAdjustments: adjustments.map((row) => ({
+      date: row.date,
+      calories: row.calories,
+      reason: row.reason,
+    })),
+    stats: {
+      weighIns: payload.dailyLogs.length,
+      measurementCheckIns: payload.measurements.length,
+      workouts: payload.workouts.length,
+      latestWeight: weights.at(-1) ?? null,
+      averageWeight28: avg(weights),
+      averageCalories28: avg(calories),
+      averageProtein28: avg(protein),
+    },
+  };
+}
+
+async function analyzeWithGemini(supabase: SupabaseClient) {
+  const { data: settings, error } = await supabase
+    .from("settings")
+    .select("gemini_api_key")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw error;
+  const apiKey = settings?.gemini_api_key?.trim();
+  if (!apiKey) {
+    throw new ApiError(
+      400,
+      "MISSING_GEMINI_KEY",
+      "Add a Gemini API key in Targets before running analysis.",
+    );
+  }
+
+  const payload = await bootstrap(supabase);
+  const summary = summarizeForAi(payload);
+  const systemInstruction =
+    "You are a concise recomp coach for a private physique ledger. " +
+    "Use the JSON evidence only. Cite AWW/weight trend, protein adherence, tape measurements " +
+    "(waist vs limbs), and training consistency. Recommend concrete changes to calorie target, " +
+    "protein target, goal rate/mode, or measurement focus when warranted. " +
+    "If data is thin, say what to log next. No medical claims. Keep under 220 words. Plain text.";
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `?key=${encodeURIComponent(apiKey)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  "Analyze this recomp ledger snapshot and advise on targets or habits:\n" +
+                  JSON.stringify(summary),
+              },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+      }),
+    });
+  } catch (cause) {
+    console.error("gemini network error", cause);
+    throw new ApiError(502, "GEMINI_NETWORK", "Could not reach Gemini.");
+  }
+
+  const raw = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      (raw as { error?: { message?: string } } | null)?.error?.message ||
+      `Gemini request failed (${response.status})`;
+    throw new ApiError(502, "GEMINI_ERROR", message);
+  }
+
+  const parts =
+    (raw as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
+      ?.candidates?.[0]?.content?.parts || [];
+  const advice = parts.map((part) => part.text || "").join("\n").trim();
+  if (!advice) {
+    throw new ApiError(502, "GEMINI_EMPTY", "Gemini returned an empty response.");
+  }
+
+  return {
+    advice,
+    generatedAt: new Date().toISOString(),
+    model: GEMINI_MODEL,
+  };
+}
+
 Deno.serve(async (req: Request) => {
-  // Must succeed with CORS headers — browsers preflight before unlock GET/POST.
-  // Use 200 + body "ok" (Supabase CORS guide); 204 with a body can crash Deno.
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -418,6 +603,8 @@ Deno.serve(async (req: Request) => {
       case "apply_adjustment":
         await applyAdjustment(supabase, body);
         return json(200, { ok: true });
+      case "analyze":
+        return json(200, await analyzeWithGemini(supabase));
       case "import_state":
         return await importState(supabase, body.state || body);
       case "reset":

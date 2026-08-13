@@ -13,11 +13,13 @@ React/Vite dashboard
 
 - `src/` — React application, calculations, API client, and tests
 - `netlify/functions/ledger.mjs` — thin transport proxy; forwards auth and body only
-- `supabase/functions/ledger/index.ts` — authoritative API contract and validation
+- `supabase/functions/ledger/index.ts` — authoritative API contract and validation (includes Gemini `analyze`)
 - `supabase/migrations/` — database schema and transactional RPCs
 - `tests/` — Playwright browser smoke tests
 
 The browser never receives a service-role key. Public tables have RLS enabled with no anon policies; database access happens through the Edge Function’s service role after passphrase verification.
+
+Goals (mode, goal weight, weekly rate), optional tape fields (arm/thigh/hip/neck), and a write-only Gemini API key live on the singleton `settings` row. Existing daily logs and measurements are never wiped by additive migrations.
 
 ## Develop
 
@@ -74,6 +76,7 @@ The hosted Edge Function reads `LEDGER_PASSPHRASE` when configured; otherwise it
 - `upsert_workout`, `delete_workout`
 - `update_settings`
 - `apply_adjustment`
+- `analyze` (Gemini coaching; requires a saved Gemini API key in Targets)
 - `import_state`
 - `reset`
 

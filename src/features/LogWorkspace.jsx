@@ -71,10 +71,23 @@ function DailyForm({ edit, onDone }) {
 
 function MeasurementForm({ edit, onDone }) {
   const { actions } = useLedger()
+  const empty = {
+    date: todayISO(),
+    shoulder: '',
+    waist: '',
+    chest: '',
+    arm: '',
+    thigh: '',
+    hip: '',
+    neck: '',
+    notes: '',
+  }
   const [form, setForm] = useState(() =>
     edit
-      ? Object.fromEntries(Object.entries(edit).map(([key, value]) => [key, value ?? '']))
-      : { date: todayISO(), shoulder: '', waist: '', chest: '', notes: '' },
+      ? Object.fromEntries(
+          Object.entries({ ...empty, ...edit }).map(([key, value]) => [key, value ?? '']),
+        )
+      : empty,
   )
   const [status, setStatus] = useState(null)
 
@@ -85,13 +98,18 @@ function MeasurementForm({ edit, onDone }) {
     }
     try {
       await actions.upsertMeasurement({
-        ...form,
+        date: form.date,
         shoulder: Number(form.shoulder),
         waist: Number(form.waist),
         chest: Number(form.chest),
+        arm: numberOrNull(form.arm),
+        thigh: numberOrNull(form.thigh),
+        hip: numberOrNull(form.hip),
+        neck: numberOrNull(form.neck),
+        notes: form.notes || '',
       })
       setStatus({ tone: 'success', text: 'Measurements saved.' })
-      setForm({ date: todayISO(), shoulder: '', waist: '', chest: '', notes: '' })
+      setForm(empty)
       onDone()
     } catch (error) {
       setStatus({ tone: 'error', text: error.message })
@@ -102,7 +120,12 @@ function MeasurementForm({ edit, onDone }) {
     <form onSubmit={submit}>
       <div className="form-grid four">
         <Field label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        {['shoulder', 'waist', 'chest'].map((key) => (
+        {['shoulder', 'waist', 'chest', 'arm'].map((key) => (
+          <Field key={key} label={`${key[0].toUpperCase() + key.slice(1)} (in)`} type="number" step="0.1" value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+        ))}
+      </div>
+      <div className="form-grid three">
+        {['thigh', 'hip', 'neck'].map((key) => (
           <Field key={key} label={`${key[0].toUpperCase() + key.slice(1)} (in)`} type="number" step="0.1" value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
         ))}
       </div>
@@ -171,14 +194,48 @@ function SettingsForm() {
     calories: ledger.targets.calories,
     protein: ledger.targets.protein,
     heightIn: ledger.heightIn,
+    goalWeightLb: ledger.goals.weightLb ?? '',
+    goalRateLbWeek: ledger.goals.rateLbWeek,
+    goalMode: ledger.goals.mode,
+    geminiApiKey: '',
   })
   const [status, setStatus] = useState(null)
 
   async function submit(event) {
     event.preventDefault()
     try {
-      await actions.updateSettings(Object.fromEntries(Object.entries(form).map(([key, value]) => [key, Number(value)])))
+      const payload = {
+        calories: Number(form.calories),
+        protein: Number(form.protein),
+        heightIn: Number(form.heightIn),
+        goalWeightLb: form.goalWeightLb === '' ? null : Number(form.goalWeightLb),
+        goalRateLbWeek: Number(form.goalRateLbWeek),
+        goalMode: form.goalMode,
+      }
+      if (form.geminiApiKey.trim()) {
+        payload.geminiApiKey = form.geminiApiKey.trim()
+      }
+      await actions.updateSettings(payload)
+      setForm((current) => ({ ...current, geminiApiKey: '' }))
       setStatus({ tone: 'success', text: 'Targets updated.' })
+    } catch (error) {
+      setStatus({ tone: 'error', text: error.message })
+    }
+  }
+
+  async function clearKey() {
+    try {
+      await actions.updateSettings({
+        calories: Number(form.calories),
+        protein: Number(form.protein),
+        heightIn: Number(form.heightIn),
+        goalWeightLb: form.goalWeightLb === '' ? null : Number(form.goalWeightLb),
+        goalRateLbWeek: Number(form.goalRateLbWeek),
+        goalMode: form.goalMode,
+        clearGeminiKey: true,
+      })
+      setForm((current) => ({ ...current, geminiApiKey: '' }))
+      setStatus({ tone: 'success', text: 'Gemini API key cleared.' })
     } catch (error) {
       setStatus({ tone: 'error', text: error.message })
     }
@@ -190,6 +247,49 @@ function SettingsForm() {
         <Field label="Calories / day" type="number" value={form.calories} onChange={(e) => setForm({ ...form, calories: e.target.value })} />
         <Field label="Protein (g / day)" type="number" value={form.protein} onChange={(e) => setForm({ ...form, protein: e.target.value })} />
         <Field label="Height (in)" type="number" step="0.1" value={form.heightIn} onChange={(e) => setForm({ ...form, heightIn: e.target.value })} />
+      </div>
+      <div className="form-grid three">
+        <label className="field">
+          <span>Goal mode</span>
+          <select value={form.goalMode} onChange={(e) => setForm({ ...form, goalMode: e.target.value })}>
+            <option value="cut">Cut</option>
+            <option value="recomp">Recomp</option>
+            <option value="bulk">Bulk</option>
+          </select>
+        </label>
+        <Field
+          label="Goal weight (lb)"
+          type="number"
+          step="0.1"
+          value={form.goalWeightLb}
+          onChange={(e) => setForm({ ...form, goalWeightLb: e.target.value })}
+          placeholder="Optional"
+        />
+        <Field
+          label="Goal rate (lb / week)"
+          type="number"
+          step="0.05"
+          value={form.goalRateLbWeek}
+          onChange={(e) => setForm({ ...form, goalRateLbWeek: e.target.value })}
+        />
+      </div>
+      <p className="field-hint">Negative rate = lose weight. Example: −0.5 lb/week for a slow recomp cut.</p>
+      <div className="form-grid two">
+        <Field
+          label={ledger.hasGeminiKey ? 'Replace Gemini API key' : 'Gemini API key'}
+          type="password"
+          autoComplete="off"
+          value={form.geminiApiKey}
+          onChange={(e) => setForm({ ...form, geminiApiKey: e.target.value })}
+          placeholder={ledger.hasGeminiKey ? '•••••••• (saved)' : 'Paste key from Google AI Studio'}
+        />
+        <div className="field-actions">
+          <span className="field-label-spacer">Key status</span>
+          <p className="key-status">{ledger.hasGeminiKey ? 'Key on file' : 'No key saved'}</p>
+          {ledger.hasGeminiKey && (
+            <button type="button" className="quiet" onClick={clearKey}>Clear key</button>
+          )}
+        </div>
       </div>
       <div className="form-footer">
         <FormStatus status={status} />
@@ -210,8 +310,8 @@ function History({ onEdit }) {
         row.date, `${row.weight} lb`, row.calories ?? '—', row.protein ? `${row.protein}g` : '—',
         <RowActions key={row.date} onEdit={() => onEdit('daily', row)} onDelete={() => actions.deleteDaily(row.date)} />,
       ])} />
-      <HistoryTable title="Measurements" columns={['Date', 'Shoulders', 'Waist', 'Chest', 'W:H', '']} rows={measurements.map((row) => [
-        row.date, row.shoulder, row.waist, row.chest, row.waistHeight?.toFixed(2) || '—',
+      <HistoryTable title="Measurements" columns={['Date', 'Shoulders', 'Waist', 'Chest', 'Arm', 'Thigh', 'W:H', '']} rows={measurements.map((row) => [
+        row.date, row.shoulder, row.waist, row.chest, row.arm ?? '—', row.thigh ?? '—', row.waistHeight?.toFixed(2) || '—',
         <RowActions key={row.date} onEdit={() => onEdit('measurement', row)} onDelete={() => actions.deleteMeasurement(row.date)} />,
       ])} />
       <HistoryTable title="Workouts" columns={['Date', 'Split', 'Exercise', 'Load', 'Sets × reps', '']} rows={workouts.map((row) => [

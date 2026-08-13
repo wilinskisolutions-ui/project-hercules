@@ -122,6 +122,18 @@ export function LedgerCharts({ ledger }) {
               { label: 'Waist', data: measurements.map((item) => item.waist), borderColor: '#d36b5c' },
               { label: 'Shoulders', data: measurements.map((item) => item.shoulder), borderColor: '#6e9d84' },
               { label: 'Chest', data: measurements.map((item) => item.chest), borderColor: '#d8a657' },
+              {
+                label: 'Arm',
+                data: measurements.map((item) => item.arm),
+                borderColor: '#7aa2c8',
+                spanGaps: true,
+              },
+              {
+                label: 'Thigh',
+                data: measurements.map((item) => item.thigh),
+                borderColor: '#b08d6a',
+                spanGaps: true,
+              },
             ].map((dataset) => ({ ...dataset, pointRadius: 2, tension: 0.25 })),
           }}
         />
