@@ -13,7 +13,8 @@ const DEFAULT_HEIGHT = 75;
 const DEFAULT_GOAL_RATE = -0.5;
 const DEFAULT_GOAL_MODE = "recomp";
 const GOAL_MODES = new Set(["cut", "recomp", "bulk"]);
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-3.6-flash";
+const TREND_DEADBAND = 0.2;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -403,28 +404,184 @@ async function resetAll(supabase: SupabaseClient) {
   if (error) throw error;
 }
 
+function todayISO(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localDate(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addDaysISO(iso: string, amount: number) {
+  const date = localDate(iso);
+  date.setDate(date.getDate() + amount);
+  return todayISO(date);
+}
+
+function daysBetween(from: string, to: string) {
+  return Math.round((localDate(to).getTime() - localDate(from).getTime()) / 86_400_000);
+}
+
+function sortByDate<T extends { date: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function average(values: number[]) {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function averageRecent(
+  logs: Array<Record<string, unknown>>,
+  field: string,
+  days = 7,
+) {
+  const withValue = sortByDate(
+    logs.filter((item) => item[field] != null) as Array<{ date: string } & Record<string, unknown>>,
+  );
+  if (!withValue.length) return null;
+  const start = addDaysISO(withValue.at(-1)!.date, -(days - 1));
+  const window = withValue.filter((item) => item.date >= start);
+  return average(window.map((item) => Number(item[field])));
+}
+
+function rollingSeries(logs: Array<{ date: string; weight: number }>) {
+  const sorted = sortByDate(logs);
+  return sorted.map((entry) => {
+    const start = addDaysISO(entry.date, -6);
+    const window = sorted.filter((item) => item.date >= start && item.date <= entry.date);
+    const aww = window.reduce((sum, item) => sum + Number(item.weight), 0) / window.length;
+    return { ...entry, aww };
+  });
+}
+
+function computeTrend(
+  logs: Array<{ date: string; weight: number }>,
+  goalRate = DEFAULT_GOAL_RATE,
+) {
+  const series = rollingSeries(logs);
+  if (series.length < 4 || daysBetween(series[0].date, series.at(-1)!.date) < 10) {
+    return { status: "logging", rate: null as number | null, goalRate, latestAWW: null as number | null, error: null as number | null };
+  }
+  const latest = series.at(-1)!;
+  const targetDate = addDaysISO(latest.date, -7);
+  let closest = series[0];
+  let best = Infinity;
+  for (const point of series) {
+    const difference = Math.abs(daysBetween(point.date, targetDate));
+    if (difference < best) {
+      best = difference;
+      closest = point;
+    }
+  }
+  const gap = daysBetween(closest.date, latest.date);
+  if (gap < 3) {
+    return { status: "logging", rate: null, goalRate, latestAWW: null, error: null };
+  }
+  const rate = (latest.aww - closest.aww) / (gap / 7);
+  const goal = Number(goalRate);
+  const error = rate - goal;
+  let status = "on_track";
+  if (Math.abs(error) <= TREND_DEADBAND) {
+    status = "on_track";
+  } else if (goal === 0) {
+    status = Math.abs(rate) > TREND_DEADBAND ? "wrong_direction" : "on_track";
+  } else if (Math.sign(rate) !== 0 && Math.sign(goal) !== 0 && Math.sign(rate) !== Math.sign(goal)) {
+    status = "wrong_direction";
+  } else if (Math.abs(rate) > Math.abs(goal) + TREND_DEADBAND) {
+    status = "too_fast";
+  } else {
+    status = "too_slow";
+  }
+  return { status, rate, goalRate: goal, latestAWW: latest.aww, error };
+}
+
 function summarizeForAi(payload: Awaited<ReturnType<typeof bootstrap>>) {
-  const logs = payload.dailyLogs.slice(-28);
-  const measurements = payload.measurements.slice(-8);
-  const workouts = payload.workouts.slice(-14);
-  const adjustments = payload.adjustments.slice(-8);
-  const weights = logs.map((row) => Number(row.weight));
-  const avg = (values: number[]) =>
-    values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-  const calories = logs
-    .map((row) => row.calories)
-    .filter((value): value is number => value != null)
-    .map(Number);
-  const protein = logs
-    .map((row) => row.protein)
-    .filter((value): value is number => value != null)
-    .map(Number);
+  const asOf = todayISO();
+  const allLogs = sortByDate(
+    payload.dailyLogs.map((row) => ({
+      date: String(row.date),
+      weight: Number(row.weight),
+      calories: row.calories == null ? null : Number(row.calories),
+      protein: row.protein == null ? null : Number(row.protein),
+    })),
+  );
+  const logs = allLogs.slice(-28);
+  const measurements = sortByDate(payload.measurements).slice(-8);
+  const workouts = sortByDate(payload.workouts).slice(-14);
+  const adjustments = sortByDate(payload.adjustments).slice(-8);
+  const goalRate = payload.goals?.rateLbWeek ?? DEFAULT_GOAL_RATE;
+  const trend = computeTrend(allLogs, goalRate);
+
+  const avgCalories7 = averageRecent(logs, "calories", 7);
+  const avgCalories28 = averageRecent(logs, "calories", 28);
+  const avgProtein7 = averageRecent(logs, "protein", 7);
+  const avgProtein28 = averageRecent(logs, "protein", 28);
+  const calorieTarget = payload.targets.calories;
+  const proteinTarget = payload.targets.protein;
+
+  const loggedDates = new Set(allLogs.map((row) => row.date));
+  const missedLast14 = Array.from({ length: 14 }, (_, index) => addDaysISO(asOf, -index)).filter(
+    (day) => !loggedDates.has(day),
+  ).length;
+
+  const firstMeas = measurements[0];
+  const lastMeas = measurements.at(-1);
+  const measurementDeltas =
+    firstMeas && lastMeas && firstMeas.date !== lastMeas.date
+      ? {
+          from: firstMeas.date,
+          to: lastMeas.date,
+          waist: lastMeas.waist - firstMeas.waist,
+          shoulder: lastMeas.shoulder - firstMeas.shoulder,
+          chest: lastMeas.chest - firstMeas.chest,
+          arm:
+            lastMeas.arm != null && firstMeas.arm != null
+              ? lastMeas.arm - firstMeas.arm
+              : null,
+          thigh:
+            lastMeas.thigh != null && firstMeas.thigh != null
+              ? lastMeas.thigh - firstMeas.thigh
+              : null,
+        }
+      : null;
+
+  const workoutsLast7 = payload.workouts.filter(
+    (row) => String(row.date) >= addDaysISO(asOf, -7),
+  ).length;
+  const workoutsLast14 = payload.workouts.filter(
+    (row) => String(row.date) >= addDaysISO(asOf, -14),
+  ).length;
+
+  const pct = (value: number | null, target: number) =>
+    value == null || !target ? null : Math.round((value / target) * 100);
 
   return {
+    asOf,
     goals: payload.goals,
     targets: payload.targets,
     heightIn: payload.heightIn,
-    recentDailyLogs: logs,
+    trend: {
+      status: trend.status,
+      awwRateLbWeek: trend.rate == null ? null : Number(trend.rate.toFixed(2)),
+      goalRateLbWeek: Number(goalRate),
+      errorVsGoalLbWeek: trend.error == null ? null : Number(trend.error.toFixed(2)),
+      latestAwwLb: trend.latestAWW == null ? null : Number(trend.latestAWW.toFixed(1)),
+    },
+    adherence: {
+      avgCalories7,
+      avgCalories28,
+      avgProtein7,
+      avgProtein28,
+      calorieAdherence7Pct: pct(avgCalories7, calorieTarget),
+      proteinAdherence7Pct: pct(avgProtein7, proteinTarget),
+      missedWeighInsLast14: missedLast14,
+      workoutsLast7,
+      workoutsLast14,
+    },
+    measurementDeltas,
+    recentDailyLogs: logs.slice(-14),
     recentMeasurements: measurements,
     recentWorkouts: workouts.map((row) => ({
       date: row.date,
@@ -439,15 +596,105 @@ function summarizeForAi(payload: Awaited<ReturnType<typeof bootstrap>>) {
       calories: row.calories,
       reason: row.reason,
     })),
-    stats: {
+    counts: {
       weighIns: payload.dailyLogs.length,
       measurementCheckIns: payload.measurements.length,
       workouts: payload.workouts.length,
-      latestWeight: weights.at(-1) ?? null,
-      averageWeight28: avg(weights),
-      averageCalories28: avg(calories),
-      averageProtein28: avg(protein),
     },
+  };
+}
+
+const COACH_SYSTEM_INSTRUCTION =
+  "You are a recomp physique coach reading a private ledger. " +
+  "Use ONLY the provided JSON evidence. Do not invent numbers. " +
+  "Your job is to find patterns, compare the weight trend to the user's goal rate, " +
+  "and give concrete ways to stay on track. " +
+  "Cite AWW rate vs goal rate in lb/week, calorie/protein averages vs targets, " +
+  "logging consistency, training frequency, and tape deltas when present. " +
+  "No medical claims. No markdown, no asterisks, no bullet symbols other than dashes. " +
+  "Keep the whole answer under 280 words. " +
+  "Always reply in exactly this plain-text format:\n" +
+  "VERDICT: <on track | too fast | too slow | wrong direction | need more data>\n" +
+  "TREND: <1-2 sentences with AWW rate vs goal rate>\n" +
+  "PATTERNS: <3-5 short lines starting with '- ' covering calories, protein, logging, training, measurements>\n" +
+  "STAY ON TRACK: <2-4 short lines starting with '- ' with concrete numbered actions>\n" +
+  "NEXT 7 DAYS: <one short focus line>\n" +
+  "If trend.status is logging or evidence is thin, VERDICT must be need more data and say exactly what to log.";
+
+type GeminiPart = { text?: string; thought?: boolean };
+type GeminiResponse = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: GeminiPart[] };
+  }>;
+  error?: { message?: string };
+};
+
+function extractAdviceText(raw: GeminiResponse | null) {
+  const parts = raw?.candidates?.[0]?.content?.parts || [];
+  return parts
+    .filter((part) => part.text && !part.thought)
+    .map((part) => part.text || "")
+    .join("\n")
+    .trim();
+}
+
+async function callGemini(
+  apiKey: string,
+  summary: ReturnType<typeof summarizeForAi>,
+  {
+    thinkingLevel,
+    maxOutputTokens,
+  }: { thinkingLevel: "minimal" | "low"; maxOutputTokens: number },
+) {
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `?key=${encodeURIComponent(apiKey)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: COACH_SYSTEM_INSTRUCTION }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text:
+                  "Coach from this precomputed ledger evidence. " +
+                  "Compare trend.awwRateLbWeek to trend.goalRateLbWeek. " +
+                  "Use adherence and measurementDeltas to spot patterns. " +
+                  "Give actions that keep the user on their goal.\n" +
+                  JSON.stringify(summary),
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens,
+          thinkingConfig: { thinkingLevel },
+        },
+      }),
+    });
+  } catch (cause) {
+    console.error("gemini network error", cause);
+    throw new ApiError(502, "GEMINI_NETWORK", "Could not reach Gemini.");
+  }
+
+  const raw = (await response.json().catch(() => null)) as GeminiResponse | null;
+  if (!response.ok) {
+    const message = raw?.error?.message || `Gemini request failed (${response.status})`;
+    throw new ApiError(502, "GEMINI_ERROR", message);
+  }
+
+  return {
+    raw,
+    advice: extractAdviceText(raw),
+    finishReason: raw?.candidates?.[0]?.finishReason || "",
   };
 }
 
@@ -469,62 +716,32 @@ async function analyzeWithGemini(supabase: SupabaseClient) {
 
   const payload = await bootstrap(supabase);
   const summary = summarizeForAi(payload);
-  const systemInstruction =
-    "You are a concise recomp coach for a private physique ledger. " +
-    "Use the JSON evidence only. Cite AWW/weight trend, protein adherence, tape measurements " +
-    "(waist vs limbs), and training consistency. Recommend concrete changes to calorie target, " +
-    "protein target, goal rate/mode, or measurement focus when warranted. " +
-    "If data is thin, say what to log next. No medical claims. Keep under 220 words. Plain text.";
 
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
-    `?key=${encodeURIComponent(apiKey)}`;
+  let result = await callGemini(apiKey, summary, {
+    thinkingLevel: "low",
+    maxOutputTokens: 2048,
+  });
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text:
-                  "Analyze this recomp ledger snapshot and advise on targets or habits:\n" +
-                  JSON.stringify(summary),
-              },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-      }),
+  if (!result.advice || result.finishReason === "MAX_TOKENS") {
+    result = await callGemini(apiKey, summary, {
+      thinkingLevel: "minimal",
+      maxOutputTokens: 4096,
     });
-  } catch (cause) {
-    console.error("gemini network error", cause);
-    throw new ApiError(502, "GEMINI_NETWORK", "Could not reach Gemini.");
   }
 
-  const raw = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message =
-      (raw as { error?: { message?: string } } | null)?.error?.message ||
-      `Gemini request failed (${response.status})`;
-    throw new ApiError(502, "GEMINI_ERROR", message);
-  }
-
-  const parts =
-    (raw as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
-      ?.candidates?.[0]?.content?.parts || [];
-  const advice = parts.map((part) => part.text || "").join("\n").trim();
-  if (!advice) {
+  if (!result.advice) {
     throw new ApiError(502, "GEMINI_EMPTY", "Gemini returned an empty response.");
+  }
+  if (result.finishReason === "MAX_TOKENS") {
+    throw new ApiError(
+      502,
+      "GEMINI_TRUNCATED",
+      "Gemini cut the coaching response short. Try Analyze again.",
+    );
   }
 
   return {
-    advice,
+    advice: result.advice,
     generatedAt: new Date().toISOString(),
     model: GEMINI_MODEL,
   };
