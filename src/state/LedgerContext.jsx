@@ -200,11 +200,26 @@ export function LedgerProvider({ children }) {
         workouts: current.workouts.filter((item) => item.id !== id),
       })),
     updateSettings: (settings) =>
-      mutate('update_settings', settings, (current) => ({
-        ...current,
-        targets: { calories: settings.calories, protein: settings.protein },
-        heightIn: settings.heightIn,
-      })),
+      mutate('update_settings', settings, (current) => {
+        const nextHasKey = settings.clearGeminiKey
+          ? false
+          : settings.geminiApiKey
+            ? true
+            : current.hasGeminiKey
+        return {
+          ...current,
+          targets: { calories: settings.calories, protein: settings.protein },
+          heightIn: settings.heightIn,
+          goals: {
+            weightLb: settings.goalWeightLb === '' || settings.goalWeightLb == null
+              ? null
+              : Number(settings.goalWeightLb),
+            rateLbWeek: Number(settings.goalRateLbWeek),
+            mode: settings.goalMode,
+          },
+          hasGeminiKey: nextHasKey,
+        }
+      }),
     applyAdjustment: (calories, reason) =>
       mutate('apply_adjustment', { calories, reason }, (current) => ({
         ...current,
@@ -214,6 +229,21 @@ export function LedgerProvider({ children }) {
           { date: new Date().toISOString().slice(0, 10), calories, reason },
         ],
       })),
+    analyze: async () => {
+      setSync('syncing', 'Analyzing with Gemini…')
+      try {
+        const result = await ledgerApi.mutate(passphraseRef.current, 'analyze')
+        setSync('success', 'Analysis ready')
+        return result
+      } catch (error) {
+        if (error.code === 'UNAUTHORIZED') {
+          setSync('error', 'Sync unauthorized — unlock again')
+        } else {
+          setSync('error', error.message)
+        }
+        throw error
+      }
+    },
     reset: async () => {
       const reset = normalizeLedger(await ledgerApi.mutate(passphraseRef.current, 'reset'))
       commitLedger(reset)
