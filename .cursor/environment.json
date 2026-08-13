@@ -1,0 +1,10 @@
+{
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev",
+      "description": "Vite React app on http://localhost:3456"
+    }
+  ]
+}
